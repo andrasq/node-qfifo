@@ -1,0 +1,15 @@
+{
+  "name": "qfifo",
+  "version": "0.0.0",
+  "description": "quick fifo file for newline terminate strings",
+  "license": "Apache-2.0",
+  "main": "qfifo.js",
+  "files": ["README.md", "qfifo.js"],
+  "readme": "see README.md",
+
+  "scripts": {
+    "test": "qnit test-*",
+    "coverage": "nyc -r text -r lcov npm test",
+    "clean": "rm -rf .nyc_output coverage npm-debug.log"
+  }
+}
