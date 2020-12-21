@@ -7,7 +7,7 @@ Quick fifo files for newline terminated string data.
 Api
 ----------------
 
-### new QFifo()
+### new QFifo( filename )
 
 ### fifo.open( mode, callback(err, fd) )
 
@@ -18,6 +18,13 @@ Api
 ### line = fifo.getline( )
 
 ### fifo.fflush( callback )
+
+
+See Also
+----------------
+- qfgets
+- qfputs
+- Quick_Fifo_File in quicklib
 
 
 Changelog

@@ -16,12 +16,12 @@ module.exports = QFifo;
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 
-function QFifo( file, mode ) {
+function QFifo( file ) {
     this.file = file;
-    this.mode = mode;
     this.head = { skip: 0 };
     this.eof = false;
 
+// TODO: move this clutter into a reader and a writer object
     this.decoder = new sd.StringDecoder();
     this.readbuf = allocBuf(256 * 1024);
     this.readstring = '';
