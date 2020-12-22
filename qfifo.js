@@ -144,23 +144,25 @@ QFifo.prototype._getmore = function _getmore( ) {
 QFifo.prototype._writesome = function _writesome( ) {
     if (!this.writing) {
         var self = this;
-        if (self.error) return;
-        self.writing = true;
-        setTimeout(function writeit() {
-            var nchars = self.writestring.length;
-            var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
-            self.writestring = '';
-            // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
-            fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
-                if (err) self.error = err; // and continue, to error out all the pending callbacks
-                self.writtenCount += nchars;
-                while (self.writeCbs.length && (self.writeCbs[0].count <= self.writtenCount || self.error)) {
-                    self.writeCbs.shift().cb(self.error);
-                }
-                if (self.writestring) writeit(); // keep writing if more data arrived
-                else self.writing = false;
-            })
-        }, self.writeDelay);
+        this.open(function(err) {
+            if (self.error) return;
+            self.writing = true;
+            setTimeout(function writeit() {
+                var nchars = self.writestring.length;
+                var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
+                self.writestring = '';
+                // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
+                fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
+                    if (err) self.error = err; // and continue, to error out all the pending callbacks
+                    self.writtenCount += nchars;
+                    while (self.writeCbs.length && (self.writeCbs[0].count <= self.writtenCount || self.error)) {
+                        self.writeCbs.shift().cb(self.error);
+                    }
+                    if (self.writestring) writeit(); // keep writing if more data arrived
+                    else self.writing = false;
+                })
+            }, self.writeDelay);
+        })
     }
 }
 
