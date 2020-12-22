@@ -86,6 +86,7 @@ QFifo.prototype.write = function write( str ) {
     // faster to concat strings and write less (1.4mb in 14 vs 56 char chunks: .35 vs .11 sec)
     this.writingCount += str.length;
     this.writestring += str;
+    // TODO: write once writeSize has been reached
     this._writesome();
 }
 
@@ -122,11 +123,11 @@ QFifo.prototype.getline = function getline( ) {
 }
 
 QFifo.prototype._getmore = function _getmore( ) {
-    if (!this.reading && !this.error) {
+    if (!this.reading) {
         var self = this;
         self.reading = true;
         this.open(function(err) {
-            if (self.error) return;
+            if (self.error) { self.reading = false; return }
             fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
                 if (err) { self.error = err; self.eof = true; return }
                 self.eof = (nbytes === 0);
@@ -142,11 +143,11 @@ QFifo.prototype._getmore = function _getmore( ) {
 }
 
 QFifo.prototype._writesome = function _writesome( ) {
-    if (!this.writing && !this.error) {
+    if (!this.writing) {
         var self = this;
         self.writing = true;
         this.open(function(err) {
-            if (self.error) return;
+            if (self.error) { self.writing = false; return }
             writeit();
             function writeit() {
                 var nchars = self.writestring.length;
