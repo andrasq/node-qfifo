@@ -20,6 +20,7 @@ module.exports = {
         this.rfifo.close();
         this.wfifo.close();
         fs.unlinkSync(this.tempfile);
+        try { fs.unlinkSync(this.tempfile + '.hd') } catch (e) {}
         done();
     },
 
@@ -50,13 +51,57 @@ module.exports = {
     'open / close': {
         'open reads the fifo header': function(t) {
             var fifo = new QFifo(this.tempfile);
-            var spy = t.spy(fs, 'readFile');
+            var spy = t.spyOnce(fs, 'readFile');
             fifo.open(function(err, fd) {
-                spy.restore();
                 t.ifError();
                 t.ok(spy.called);
                 t.equal(spy.args[0][0], fifo.headername);
                 t.done();
+            })
+        },
+
+        'open tolerates invalid json fifo header': function(t) {
+            var fifo = new QFifo(__filename);
+            var spy = t.stubOnce(fs, 'readFile').yields(null, '{]');
+            fifo.open(function(err, fd) {
+                t.ifError(err);
+                t.equal(fifo.position, 0);
+                fifo.close();
+                t.done();
+            })
+        },
+
+        'open tolerates null json fifo header': function(t) {
+            var fifo = new QFifo(__filename);
+            var spy = t.stubOnce(fs, 'readFile').yields(null, 'null');
+            fifo.open(function(err, fd) {
+                t.ifError(err);
+                t.equal(fifo.position, 0);
+                fifo.close();
+                t.done();
+            })
+        },
+
+        'open extracts read offset from header and applies it': function(t) {
+            var fifo = new QFifo(__filename);
+            var lines = fs.readFileSync(__filename).toString()
+                .split('\n').slice(0, 10)
+                .map(function(line) { return line + '\n' });
+            var spy = t.stubOnce(fs, 'readFile').yields(null, '{"position":14}');
+            fifo.open(function(err, fd) {
+                t.ifError(err);
+                t.equal(fifo.position, lines[0].length + lines[1].length);
+                fifo.getline();
+                setTimeout(function() {
+                    // nb: several lines got buffered, can retrieve them synchronously
+                    // we match the first 
+                    t.equal(fifo.getline(), lines[2]);
+                    t.equal(fifo.position, lines[0].length + lines[1].length + lines[2].length);
+                    t.equal(fifo.getline(), lines[3]);
+                    t.equal(fifo.position, lines[0].length + lines[1].length + lines[2].length + lines[3].length);
+                    fifo.close();
+                    t.done();
+                }, 5);
             })
         },
 
