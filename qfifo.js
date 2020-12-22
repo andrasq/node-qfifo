@@ -16,15 +16,23 @@ module.exports = QFifo;
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 
-function QFifo( file ) {
-    this.file = file;
-    this.head = { skip: 0 };
-    this.eof = false;
-    this.error = null;
+function QFifo( filename, mode ) {
+    mode = mode || 'r';
+    if (mode[0] !== 'r' && mode[0] !== 'a') throw new Error(mode + ": bad open mode, expected 'r' or 'a'");
+    if (!filename) throw new Error('missing filename');
+
+    this.filename = filename;
+    this.headername = filename + '.hd';
+    this.mode = mode;
+    this.eof = false;           // no data from last read
+    this.error = null;          // read error, bad file
+    this.position = 0;          // byte offset of next line to be read
+
 
     // TODO: move this clutter into a Reader and a Writer object
     this.decoder = new sd.StringDecoder();
     this.readbuf = allocBuf(32 * 1024);
+    this.seekposition = this.position;
     this.readstring = '';
     this.readoffset = 0;
 
@@ -41,12 +49,17 @@ function QFifo( file ) {
 QFifo.prototype.open = function open( mode, callback ) {
     var self = this;
     if (this.fd >= 0) return callback(null, this.fd);
-// FIXME: reopen where left off reading last time, so can stop part-way and resume
-    fs.open(this.file, mode === 'r' ? 'r' : 'a', function(err, fd) {
+// FIXME: use this.mode, and remove mode func param
+    fs.open(this.filename, mode === 'r' ? 'r' : 'a', function(err, fd) {
         self.fd = err ? -1 : fd;
-        self.eof = false;
-        self.error = null;
-        callback(err, self.fd);
+        if (err) { self.error = err; self.eof = true; callback(err, self.fd) }
+        else fs.readFile(self.headername, function(err2, header) {
+            try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
+            self.position = self.seekposition = header.position || 0;
+            self.eof = false;
+            self.error = null;
+            callback(err, self.fd);
+        })
     });
 }
 
@@ -62,13 +75,18 @@ QFifo.prototype.putline = function putline( str ) {
     this.write(str);
 }
 
+// push the written data to the file
 QFifo.prototype.fflush = function fflush( callback ) {
     if (this.error) callback(this.error);
     else if (this.writingCount <= this.writtenCount) callback();
     else this.writeCbs.push({ count: this.writingCount, cb: callback });
 }
 
-// FIXME: need rsync to persist read state for to reopen (aka checkpoint / save / rsync)
+// update the read header
+QFifo.prototype.rsync = function rsync( callback ) {
+    var header = { position: this.position };
+    fs.writeFile(this.headername, JSON.stringify(header), callback);
+}
 
 // tracking readoffset idea borrowed from qfgets
 QFifo.prototype.getline = function getline( ) {
@@ -83,6 +101,7 @@ QFifo.prototype.getline = function getline( ) {
         this.readoffset = ix + 1;
         // TODO: this is an inefficient but easy way to track the read offset
         // TODO: maybe find eoln() newlines in the buffer, remember line offets
+        this.position += Buffer.byteLength(line);
         return line;
     }
 }
@@ -98,9 +117,10 @@ QFifo.prototype._getmore = function _getmore( ) {
     var self = this;
     if (!this.reading && !this.error) {
         this.reading = true;
-        fs.read(this.fd, this.readbuf, 0, this.readbuf.length, null, function(err, nbytes) {
+        fs.read(this.fd, this.readbuf, 0, this.readbuf.length, self.seekposition, function(err, nbytes) {
             if (err) { self.error = err; self.eof = true; return }
             self.eof = (nbytes === 0);
+            self.seekposition += nbytes;
             self.reading = false;
             if (nbytes > 0) {
                 self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
@@ -119,7 +139,7 @@ QFifo.prototype._writesome = function _writesome( ) {
             var buf = fromBuf(self.writestring);
             self.writestring = '';
             fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
-                if (err) self.error = err;
+                if (err) self.error = err; // and continue, to error out all the pending callbacks
                 self.writtenCount += nchars;
                 while (self.writeCbs.length && (self.writeCbs[0].count <= self.writtenCount || self.error)) {
                     self.writeCbs.shift().cb(self.error);
