@@ -16,8 +16,9 @@ module.exports = QFifo;
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 
-function QFifo( filename, mode ) {
-    mode = mode || 'r';
+function QFifo( filename, options ) {
+    if (typeof options !== 'object') options = { mode: options };
+    var mode = options.mode || 'r';
     if (mode[0] !== 'r' && mode[0] !== 'a') throw new Error(mode + ": bad open mode, expected 'r' or 'a'");
     if (!filename) throw new Error('missing filename');
 
@@ -132,12 +133,12 @@ QFifo.prototype._getmore = function _getmore( ) {
 }
 
 QFifo.prototype._writesome = function _writesome( ) {
+    var self = this;
     if (!this.writing && !this.error) {
-        var self = this;
         self.writing = true;
         setTimeout(function writeit() {
             var nchars = self.writestring.length;
-            var buf = fromBuf(self.writestring);
+            var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
             self.writestring = '';
             // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
             fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {

@@ -117,8 +117,8 @@ Todo
 
 - `options` instead of `accessmode`
 - `preopen` option
-- impose a max write chunk size
 - make `r`-mode `open` run `_getmore` and wait for results before returning
+- have get / put auto-open the file
 
 
 Changelog

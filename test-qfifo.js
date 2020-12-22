@@ -19,7 +19,7 @@ module.exports = {
     afterEach: function(done) {
         this.rfifo.close();
         this.wfifo.close();
-        fs.unlinkSync(this.tempfile);
+        try { fs.unlinkSync(this.tempfile) } catch (e) {}
         try { fs.unlinkSync(this.tempfile + '.hd') } catch (e) {}
         done();
     },
