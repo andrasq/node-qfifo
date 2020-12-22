@@ -46,22 +46,28 @@ function QFifo( filename, options ) {
     this.writing = false;
     this.writeDelay = 2;
     this.writeCbs = new Array();
+    this.openCbs = new Array();
 }
 
 QFifo.prototype.open = function open( callback ) {
     var self = this;
-    if (this.fd >= 0) return callback(null, this.fd);
-    fs.open(this.filename, this.mode, function(err, fd) {
-        self.fd = err ? -1 : fd;
-        if (err) { self.error = err; self.eof = true; callback(err, self.fd); return }
-        fs.readFile(self.headername, function(err2, header) {
-            try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
-            self.position = self.seekposition = header.position || 0;
-            self.eof = false;
-            self.error = null;
-            callback(err, self.fd);
-        })
-    });
+    if (this.fd >= 0 || this.error) return callback(this.error, this.fd);
+    this.openCbs.push(callback);
+    if (this.fd === -1) {
+        this.fd = -2;
+        fs.open(this.filename, this.mode, function(err, fd) {
+            self.fd = err ? -1 : fd;
+            if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
+            fs.readFile(self.headername, function(err2, header) {
+                try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
+                self.position = self.seekposition = header.position || 0;
+                self.eof = false;
+                self.error = null;
+                _runCallbacks(self.openCbs, err, self.fd);
+            })
+        });
+    }
+    function _runCallbacks(cbs, err, ret) { while (cbs.length) cbs.shift()(err, ret) }
 }
 
 QFifo.prototype.close = function close( ) {
