@@ -1,7 +1,7 @@
 {
   "name": "qfifo",
-  "version": "0.0.0",
-  "description": "quick fifo file for newline terminate strings",
+  "version": "0.1.0",
+  "description": "quick file-based fifo to buffer newline terminate string data",
   "license": "Apache-2.0",
   "main": "qfifo.js",
   "files": ["README.md", "qfifo.js"],
