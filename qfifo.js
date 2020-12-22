@@ -23,7 +23,7 @@ function QFifo( filename, mode ) {
 
     this.filename = filename;
     this.headername = filename + '.hd';
-    this.mode = mode === 'r' ? 'r' : 'a';
+    this.mode = mode === 'r' ? 'r+' : 'a+';
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
@@ -75,6 +75,13 @@ QFifo.prototype.putline = function putline( str ) {
     this.write(str);
 }
 
+QFifo.prototype.write = function write( str ) {
+    // faster to concat strings and write less (1.4mb in 14 vs 56 char chunks: .35 vs .11 sec)
+    this.writingCount += str.length;
+    this.writestring += str;
+    this._writesome();
+}
+
 // push the written data to the file
 QFifo.prototype.fflush = function fflush( callback ) {
     if (this.error) callback(this.error);
@@ -105,13 +112,6 @@ QFifo.prototype.getline = function getline( ) {
         this.position += Buffer.byteLength(line);
         return line;
     }
-}
-
-QFifo.prototype.write = function write( str ) {
-    // faster to concat strings and write less (1.4mb in 14 vs 56 char chunks: .35 vs .11 sec)
-    this.writingCount += str.length;
-    this.writestring += str;
-    this._writesome();
 }
 
 QFifo.prototype._getmore = function _getmore( ) {

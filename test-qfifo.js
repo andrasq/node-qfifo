@@ -210,6 +210,51 @@ module.exports = {
             })
         },
 
+        'can read and write the same fifo': function(t) {
+            var fifo = this.wfifo;
+
+            // write somem data
+            fifo.putline('line1\n');
+            fifo.putline('line22\n');
+            // data is buffered not written yet
+            t.equal(fifo.getline(), '');
+            t.equal(fifo.getline(), '');
+            // flush to be notified when the write happend
+            fifo.fflush(function(err) {
+                t.ifError(err);
+                // start the read
+                fifo.getline();
+                // wait for the read to complete
+                setTimeout(function() {
+                    // read back the written data
+                    t.equal(fifo.getline(), 'line1\n');
+                    t.equal(fifo.position, 6);
+                    t.equal(fifo.getline(), 'line22\n');
+                    t.equal(fifo.position, 13);
+                    // end of data, read more to detect the eof
+                    t.equal(fifo.getline(), '');
+                    t.equal(fifo.reading, true);
+                    // wait for the second read to complete
+                    setTimeout(function() {
+                        // second read should see the eof
+                        t.equal(fifo.eof, true);
+                        // write new data and wait for the write to complete
+                        fifo.putline('line333');
+                        setTimeout(function() {
+                            // kick off a read again
+                            t.equal(fifo.getline(), '');
+                            setTimeout(function() {
+                                // see the new data, and because there was data no more eof
+                                t.equal(fifo.getline(), 'line333\n');
+                                t.equal(fifo.eof, false);
+                                t.done();
+                            }, 5)
+                        }, 5)
+                    }, 5)
+                }, 5)
+            })
+        },
+
         'writes lines that arrive while writing': function(t) {
             var rfifo = this.rfifo;
             var wfifo = this.wfifo;
@@ -361,4 +406,13 @@ function readall( fifo, lines, cb ) {
         if (fifo.eof) cb(null, lines);
         else setImmediate(loop);
     })();
+}
+
+// iterateSteps adapted from minisql from miniq, originally from qrepeat and aflow
+function runSteps(steps, callback) {
+    var ix = 0;
+    (function _loop(err, a1, a2) {
+        if (err || ix >= steps.length) return callback(err, a1, a2);
+        steps[ix++](_loop, a1, a2);
+    })()
 }

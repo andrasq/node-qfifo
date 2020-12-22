@@ -1,20 +1,27 @@
 qfifo
 =====
 
-Quick file-based fifo to buffer newline terminated string data.
+Quick file-based fifo to buffer newline terminated string data, designed to be a very low
+overhead, very fast local journal that can both quickly persist large volumes of data and
+efficiently feed the ingest process that consumes it.
 
-## Features
+## Highlights
 
 - Simple `open` / `getline` / `putline` / `close` semantics.
 - Synchronous calls, asynchronous file i/o.
-- Efficient batched read and write operations.
-- Very high throughput, hundreds of megabytes of line data per second.
+- Efficient batched file reads and writes.
+- Very high throughput, hundreds of megabytes of data per second.
+- Universally supported, very easy, very fast newline terminated plaintext format.
+- Metadata is optional, and is kept alongside in a separate file.  Only the consumer
+  might need metadata.
+- No external dependencies.
+- Works with node-v0.6 and up.
 
 ## Limitations
 
-- QFifos are inherently single-reader, the reader owns the fifo.
-- Concurrent writes are not supported (file locking is missing from nodejs).
-  This differs from the quicklib Quick_Fifo_File that QFifo was based on.
+- QFifos are inherently single-reader, the consuming process owns the fifo.
+- Single-writer, concurrent writes are not supported. (File locking is missing from nodejs, so
+  this incarnation differs from quicklib Quick_Fifo_File that it was based on.)
 
 
 Api
@@ -22,27 +29,28 @@ Api
 
 ### fifo = new QFifo( filename, accessmode )
 
-Create a fifo for reading or appending the named file.  Mode must be `'r'` or `'a'` for
-read or append mode access.  The same fifo cannot both read and write.  Creating a fifo
-is a fast, the file is only accessed or created on `open()`.
+Create a fifo for reading or appending the named file.  Mode must be `'r'` or `'a'` to control
+whether the file will be created if missing: `a` append mode can create the file, `r` read mode
+requires the file to already exist.  All fifos can both read and write.  Creating a new QFifo is
+a fast, it only allocates the object; the fifo must still be `open`-ed before use.
 
 ### fifo.open( callback(err, fd) )
 
-Open or create the file the fifo is using.  Currently the files being read must already exist,
-files appended are created empty.  Returns the file descriptor used or the open error.
+Open the file for use by the fifo.  Returns the file descriptor used or the open error.
+The fifo has no lines yet after the open, reading is started by the first `getline()`.
 
 ### fifo.close( )
 
 Close the file descriptor.  The fifo will not be usable until it is reopened.  Closing the fifo
-while still writing will produce a write error; use fflush() to avoid this.
+while still writing will produce a write error; use fflush().
 
 ### fifo.putline( line )
 
 Append a line of text to the file.  All lines must be newline terminated; putline will supply
-the newline if it is missing.  Putline is a non-blocking call that buffers the line to be
-written and returns immediately.  Writing is is done asychronously in the background in batches.
-The application must periodically yield the cpu for the writes to happen.  Any write errors are
-saved in `fifo.error` and no further writes will be performed.
+the newline if it is missing.  Putline is a non-blocking call that buffers the data and returns
+immediately.  Writing is is done in batches asychronously in the background.  The application
+must periodically yield the cpu for the writes to happen.  Any write errors are saved in
+`fifo.error` and no further writes will be performed.
 
 ### fifo.write( string )
 
@@ -50,8 +58,8 @@ Internal fifo append method that does not mandate newlines.  Use with caution.
 
 ### fifo.fflush( callback )
 
-Call callback once all currently buffered writes have completed.  New writes made after the
-fflush call are not waited for.
+Invoke callback() once the currently buffered writes have completed.  New writes made after the
+fflush call are not waited for (but may still have been included in the batch).
 
 ### line = fifo.getline( )
 
@@ -59,7 +67,7 @@ Return the next unread line from the file or the empty string `''` if there are 
 available.  Reading is asynchronous, it is done in batches in the background, so lines may
 become available later.  Always returns a utf8 string.  The `fifo.eof` flag is set to indicate
 that zero bytes were read from the file.  Retrying the read may clear the eof flag.  Read errors
-are saved in `fifo.error` and no more of the file is read.
+are saved in `fifo.error` and stop the file being read.
 
     var readFile(filename, callback) {
         var contents = '';
@@ -78,9 +86,9 @@ are saved in `fifo.error` and no more of the file is read.
 
 ### fifo.rsync( callback )
 
-Checkpoint the current `fifo.position` byte offset of the next unread line so if the fifo is
-reopened it can resume reading where it left off.  Saves the information to a separate file
-named after fifo file but with a `'.hd'` extension added, eg `filename.hd`.
+Checkpoint the byte offset of the next unread line from `fifo.position` so if the fifo is
+reopened it can resume reading where it left off.  The information is saved in JSON form to a
+separate file named the same as the fifo `filename` but with `'.hd'` appended.
 
 ### fifo.position
 
@@ -102,7 +110,16 @@ See Also
 - Quick_Fifo_File in quicklib
 
 
+Todo
+----------------
+
+- `options` instead of `accessmode`
+- `preopen` option
+- impose a max write chunk size
+- make `r`-mode `open` run `_getmore` and wait for results before returning
+
+
 Changelog
 ----------------
 
-- 0.1.0 - first tested version
+- 0.1.0 - first version
