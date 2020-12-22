@@ -23,7 +23,7 @@ function QFifo( filename, mode ) {
 
     this.filename = filename;
     this.headername = filename + '.hd';
-    this.mode = mode;
+    this.mode = mode === 'r' ? 'r' : 'a';
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
@@ -46,14 +46,13 @@ function QFifo( filename, mode ) {
     this.writeCbs = new Array();
 }
 
-QFifo.prototype.open = function open( mode, callback ) {
+QFifo.prototype.open = function open( callback ) {
     var self = this;
     if (this.fd >= 0) return callback(null, this.fd);
-// FIXME: use this.mode, and remove mode func param
-    fs.open(this.filename, mode === 'r' ? 'r' : 'a', function(err, fd) {
+    fs.open(this.filename, this.mode, function(err, fd) {
         self.fd = err ? -1 : fd;
-        if (err) { self.error = err; self.eof = true; callback(err, self.fd) }
-        else fs.readFile(self.headername, function(err2, header) {
+        if (err) { self.error = err; self.eof = true; callback(err, self.fd); return }
+        fs.readFile(self.headername, function(err2, header) {
             try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
             self.position = self.seekposition = header.position || 0;
             self.eof = false;

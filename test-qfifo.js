@@ -8,11 +8,11 @@ var setImmediate = eval('global.setImmediate || process.nextTick');
 module.exports = {
     beforeEach: function(done) {
         this.tempfile = '/tmp/test-qfifo-' + process.pid + '.txt';
-        var wfifo = this.wfifo = new QFifo(this.tempfile);
-        var rfifo = this.rfifo = new QFifo(this.tempfile);
-        wfifo.open('w', function(err) {
+        var rfifo = this.rfifo = new QFifo(this.tempfile, 'r');
+        var wfifo = this.wfifo = new QFifo(this.tempfile, 'a');
+        wfifo.open(function(err) {
             if (err) throw err;
-            rfifo.open('r', done);
+            rfifo.open(done);
         })
     },
 
@@ -23,9 +23,20 @@ module.exports = {
         done();
     },
 
+    'constructor': {
+        'requires filename': function(t) {
+            t.throws(function() { new QFifo() }, /filename/);
+            t.done();
+        },
+        'rejects invalid open mode': function(t) {
+            t.throws(function() { new QFifo('/nonesuch', 'w') }, /open mode/);
+            t.done();
+        },
+    },
+
     'can open and read files': function(t) {
         var fifo = new QFifo(__filename);
-        fifo.open('r', function(err, fd) {
+        fifo.open(function(err, fd) {
             t.ifError(err);
             var line, lines = [];
             readall(fifo, new Array(), function(err, lines) {
@@ -37,10 +48,22 @@ module.exports = {
     },
 
     'open / close': {
+        'open reads the fifo header': function(t) {
+            var fifo = new QFifo(this.tempfile);
+            var spy = t.spy(fs, 'readFile');
+            fifo.open(function(err, fd) {
+                spy.restore();
+                t.ifError();
+                t.ok(spy.called);
+                t.equal(spy.args[0][0], fifo.headername);
+                t.done();
+            })
+        },
+
         'return open error and sets fd to -1': function(t) {
             var fifo = new QFifo('/nonesuch');
             t.equal(fifo.fd, -1);
-            fifo.open('r', function(err, fd) {
+            fifo.open(function(err, fd) {
                 t.equal(err.code, 'ENOENT');
                 t.equal(fd, -1);
                 t.equal(fifo.fd, -1);
@@ -48,11 +71,11 @@ module.exports = {
             })
         },
 
-        'can second open is noop': function(t) {
+        'second open is noop': function(t) {
             var fifo = this.rfifo;
-            fifo.open('r', function(err, fd) {
+            fifo.open(function(err, fd) {
                 t.ok(fd >= 0);
-                fifo.open('r', function(err, fd2) {
+                fifo.open(function(err, fd2) {
                     t.ok(fd2 >= 0);
                     t.equal(fd2, fd);
                     t.done();
@@ -60,12 +83,23 @@ module.exports = {
             })
         },
 
-        'can second close is noop': function(t) {
+        'second close is noop': function(t) {
             var fifo = this.wfifo;
             fifo.close();
             fifo.close();
             fifo.close();
             t.done();
+        },
+
+        'close catches errors': function(t) {
+            var fifo = this.rfifo;
+            var spy = t.stubOnce(fs, 'closeSync').throws('mock-closeSync-error');
+            fifo.open(function(err) {
+                t.ifError(err);
+                fifo.close();
+                t.ok(spy.called);
+                t.done();
+            })
         },
     },
 
@@ -111,12 +145,13 @@ module.exports = {
 
     'speed': {
         'write 100k 200B lines': function(t) {
-            var fifo = new QFifo(this.tempfile);
+            var tempfile = this.tempfile;
+            var fifo = new QFifo(tempfile, 'a');
             var line = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n';
-            fifo.open('a', function(err, fd) {
+            fifo.open(function(err, fd) {
                 t.ifError(err);
                 console.time('AR: write 100k');
                 for (var i=0; i<100000; i++) fifo.putline(line);
@@ -126,8 +161,9 @@ module.exports = {
                     t.ifError(err);
                     fifo.close();
 
+                    fifo = new QFifo(tempfile, 'r');
                     console.time('AR: read 100k');
-                    fifo.open('r', function(err, fd) {
+                    fifo.open(function(err, fd) {
                         t.ifError(err);
                         readall(fifo, new Array(), function(err, lines) {
                             console.timeEnd('AR: read 100k');
