@@ -270,6 +270,42 @@ module.exports = {
                 fifo.error = 'mock-read-error';
                 var spy = t.spy(fs, 'read');
                 fifo._getmore();
+                t.equal(fifo.reading, false);
+                setTimeout(function() {
+                    spy.restore();
+                    t.equal(spy.called, false);
+                    t.done();
+                }, 5);
+            },
+        },
+
+        '_writesome': {
+            'uses the `fifo.writing` flag as a mutex': function(t) {
+                var fifo = this.wfifo;
+                t.equal(fifo.writing, false);
+                fifo._writesome();
+                t.equal(fifo.writing, true);
+                setTimeout(function() {
+                    t.equal(fifo.writing, false);
+                    t.done();
+                }, 5);
+            },
+            'sets fifo.error on write error': function(t) {
+                var fifo = this.wfifo;
+                var spy = t.stubOnce(fs, 'write').yields('mock-write-error');
+                fifo._writesome();
+                setTimeout(function() {
+                    t.ok(spy.called);
+                    t.equal(fifo.error, 'mock-write-error');
+                    t.done();
+                }, 5);
+            },
+            'does not write if fifo.error is set': function(t) {
+                var fifo = this.wfifo;
+                fifo.error = 'mock-write-error';
+                var spy = t.spy(fs, 'write');
+                fifo._writesome();
+                t.equal(fifo.writing, false);
                 setTimeout(function() {
                     spy.restore();
                     t.equal(spy.called, false);
