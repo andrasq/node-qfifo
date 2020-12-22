@@ -10,10 +10,9 @@ module.exports = {
         this.tempfile = '/tmp/test-qfifo-' + process.pid + '.txt';
         var rfifo = this.rfifo = new QFifo(this.tempfile, 'r');
         var wfifo = this.wfifo = new QFifo(this.tempfile, 'a');
-        wfifo.open(function(err) {
-            if (err) throw err;
-            rfifo.open(done);
-        })
+        // pre-create the file else read fifos error out on open
+        fs.writeFileSync(this.tempfile, "");
+        done();
     },
 
     afterEach: function(done) {
@@ -48,7 +47,27 @@ module.exports = {
         })
     },
 
-    'open / close': {
+    'open': {
+        'fifos auto-open on read': function(t) {
+            var fifo = new QFifo(__filename, 'r');
+            fifo.getline();
+            setTimeout(function() {
+                t.equal(fifo.getline(), fs.readFileSync(__filename).toString().split('\n')[0] + '\n');
+                t.done();
+            }, 5)
+        },
+
+        'fifos auto-open on write': function(t) {
+            var tempfile = this.tempfile;
+            var fifo = new QFifo(tempfile, 'a');
+            fifo.putline('line1');
+            fifo.putline('line2');
+            setTimeout(function() {
+                t.equal(fs.readFileSync(tempfile), 'line1\nline2\n');
+                t.done();
+            }, 5);
+        },
+
         'open reads the fifo header': function(t) {
             var fifo = new QFifo(this.tempfile);
             var spy = t.spyOnce(fs, 'readFile');
@@ -128,6 +147,25 @@ module.exports = {
             })
         },
 
+        'concurrent opens are allowed': function(t) {
+            var fifo = this.rfifo;
+            var fds = [];
+            fifo.open(gatherFd);
+            fifo.open(gatherFd);
+            fifo.open(gatherFd);
+            function gatherFd(err, fd) {
+                t.ifError(err);
+                fds.push(fd);
+                if (fds.length === 3) {
+                    t.equal(fds[0], fds[1]);
+                    t.equal(fds[1], fds[2]);
+                    t.done();
+                }
+            }
+        },
+    },
+
+    'close': {
         'second close is noop': function(t) {
             var fifo = this.wfifo;
             fifo.close();
