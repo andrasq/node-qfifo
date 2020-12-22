@@ -231,6 +231,54 @@ module.exports = {
         },
     },
 
+    'helpers': {
+        '_getmore': {
+            'sets the `fifo.reading` flag as a mutex': function(t) {
+                var fifo = this.rfifo;
+                t.equal(fifo.reading, false);
+                fifo._getmore();
+                t.equal(fifo.reading, true);
+                setTimeout(function() {
+                    t.equal(fifo.reading, false);
+                    t.equal(fifo.eof, true);
+                    t.done();
+                }, 5);
+            },
+            'sets eof if zero bytes read': function(t) {
+                var fifo = this.rfifo;
+                fifo.eof = false;
+                var spy = t.stubOnce(fs, 'read').yields(null, 0);
+                fifo._getmore();
+                setTimeout(function() {
+                    t.ok(spy.called);
+                    t.equal(fifo.eof, true);
+                    t.done();
+                }, 5);
+            },
+            'sets fifo.error on read error': function(t) {
+                var fifo = this.rfifo;
+                var spy = t.stubOnce(fs, 'read').yields('mock-read-error');
+                fifo._getmore();
+                setTimeout(function() {
+                    t.ok(spy.called);
+                    t.equal(fifo.error, 'mock-read-error');
+                    t.done();
+                }, 5);
+            },
+            'does not read if fifo.error is set': function(t) {
+                var fifo = this.rfifo;
+                fifo.error = 'mock-read-error';
+                var spy = t.spy(fs, 'read');
+                fifo._getmore();
+                setTimeout(function() {
+                    spy.restore();
+                    t.equal(spy.called, false);
+                    t.done();
+                }, 5);
+            },
+        },
+    },
+
     'speed': {
         'write 100k 200B lines': function(t) {
             var tempfile = this.tempfile;
