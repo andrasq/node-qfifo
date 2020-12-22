@@ -1,5 +1,7 @@
 qfifo
 =====
+[![Build Status](https://travis-ci.org/andrasq/node-qfifo.svg?branch=master)](https://travis-ci.org/andrasq/node-qfifo)
+<!-- [![Coverage Status](https://coveralls.io/repos/github/andrasq/node-qfifo/badge.svg?branch=master)](https://coveralls.io/github/andrasq/node-qfifo?branch=master) -->
 
 Quick file-based fifo to buffer newline terminated string data, designed to be a very low
 overhead, very fast local journal that can both quickly persist large volumes of data and
