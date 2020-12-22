@@ -81,7 +81,8 @@ QFifo.prototype.fflush = function fflush( callback ) {
     else this.writeCbs.push({ count: this.writingCount, cb: callback });
 }
 
-// update the read header
+// checkpoint the read header
+// Note: this version is kinda slow, do not call often.
 QFifo.prototype.rsync = function rsync( callback ) {
     var header = { position: this.position };
     fs.writeFile(this.headername, JSON.stringify(header), callback);

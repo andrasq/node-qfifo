@@ -148,6 +148,49 @@ module.exports = {
         },
     },
 
+    'rsync / fflush': {
+        'rsync checkpoints the fifo header': function(t) {
+            var tempfile = this.tempfile;
+            var rfifo = this.rfifo;
+            fs.writeFileSync(tempfile, 'line1\nline22\nline333\n');
+            rfifo.getline();
+            setTimeout(function() {
+                t.equal(rfifo.getline(), 'line1\n');
+                t.equal(rfifo.getline(), 'line22\n');
+                rfifo.rsync(function(err, ret) {
+                    t.ifError(err);
+                    t.contains(String(fs.readFileSync(tempfile + '.hd')), '"position":13');
+                    t.done();
+                })
+            }, 5);
+        },
+
+        'fflush waits for all previous lines to be written': function(t) {
+            var wfifo = this.wfifo;
+            var tempfile = this.tempfile;
+            wfifo.putline('line1');
+            wfifo.putline('line22');
+            wfifo.fflush(function(err) {
+                t.ifError(err);
+                t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\n');
+                wfifo.putline('line333');
+                wfifo.fflush(function(err) {
+                    t.ifError(err);
+                    t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\n');
+                    t.done();
+                })
+            })
+        },
+
+        'fflush returns existing fifo error': function(t) {
+            this.wfifo.error = 'mock-write-error';
+            this.wfifo.fflush(function(err) {
+                t.equal(err, 'mock-write-error');
+                t.done();
+            })
+        },
+    },
+
     'read / write': {
         'able to read and write': function(t) {
             var rfifo = this.rfifo, wfifo = this.wfifo;
