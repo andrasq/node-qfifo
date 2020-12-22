@@ -122,18 +122,21 @@ QFifo.prototype.getline = function getline( ) {
 }
 
 QFifo.prototype._getmore = function _getmore( ) {
-    var self = this;
-    if (!this.reading && !this.error) {
-        this.reading = true;
-        fs.read(this.fd, this.readbuf, 0, this.readbuf.length, self.seekposition, function(err, nbytes) {
-            if (err) { self.error = err; self.eof = true; return }
-            self.eof = (nbytes === 0);
-            self.seekposition += nbytes;
-            self.reading = false;
-            if (nbytes > 0) {
-                self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
-                // TODO: maybe keep track of the line starting offsets, eoln(buf)
-            }
+    if (!this.reading) {
+        var self = this;
+        this.open(function(err) {
+            if (self.error) return;
+            self.reading = true;
+            fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
+                if (err) { self.error = err; self.eof = true; return }
+                self.eof = (nbytes === 0);
+                self.seekposition += nbytes;
+                self.reading = false;
+                if (nbytes > 0) {
+                    self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
+                    // TODO: maybe keep track of the line starting offsets, eoln(buf)
+                }
+            })
         })
     }
 }
