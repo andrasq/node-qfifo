@@ -105,7 +105,7 @@ module.exports = {
             })
         },
 
-        'return open error and sets fd to -1': function(t) {
+        'open returns error and sets fd to -1': function(t) {
             var fifo = new QFifo('/nonesuch');
             t.equal(fifo.fd, -1);
             fifo.open(function(err, fd) {

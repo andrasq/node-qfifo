@@ -122,7 +122,7 @@ QFifo.prototype.getline = function getline( ) {
 }
 
 QFifo.prototype._getmore = function _getmore( ) {
-    if (!this.reading) {
+    if (!this.reading && !this.error) {
         var self = this;
         self.reading = true;
         this.open(function(err) {
@@ -142,7 +142,7 @@ QFifo.prototype._getmore = function _getmore( ) {
 }
 
 QFifo.prototype._writesome = function _writesome( ) {
-    if (!this.writing) {
+    if (!this.writing && !this.error) {
         var self = this;
         self.writing = true;
         this.open(function(err) {
