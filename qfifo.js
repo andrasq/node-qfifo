@@ -142,8 +142,9 @@ QFifo.prototype._getmore = function _getmore( ) {
 }
 
 QFifo.prototype._writesome = function _writesome( ) {
-    var self = this;
-    if (!this.writing && !this.error) {
+    if (!this.writing) {
+        var self = this;
+        if (self.error) return;
         self.writing = true;
         setTimeout(function writeit() {
             var nchars = self.writestring.length;
@@ -156,8 +157,8 @@ QFifo.prototype._writesome = function _writesome( ) {
                 while (self.writeCbs.length && (self.writeCbs[0].count <= self.writtenCount || self.error)) {
                     self.writeCbs.shift().cb(self.error);
                 }
-                self.writestring ? writeit() : self.writing = false; // keep writing if there is more
-                self.writing = false;
+                if (self.writestring) writeit(); // keep writing if more data arrived
+                else self.writing = false;
             })
         }, self.writeDelay);
     }
