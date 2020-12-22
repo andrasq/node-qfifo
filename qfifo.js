@@ -147,7 +147,8 @@ QFifo.prototype._writesome = function _writesome( ) {
         self.writing = true;
         this.open(function(err) {
             if (self.error) return;
-            setTimeout(function writeit() {
+            writeit();
+            function writeit() {
                 var nchars = self.writestring.length;
                 var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
                 self.writestring = '';
@@ -161,7 +162,7 @@ QFifo.prototype._writesome = function _writesome( ) {
                     if (self.writestring) writeit(); // keep writing if more data arrived
                     else self.writing = false;
                 })
-            }, self.writeDelay);
+            }
         })
     }
 }
