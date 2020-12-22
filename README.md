@@ -12,8 +12,9 @@ Quick file-based fifo to buffer newline terminated string data.
 
 ## Limitations
 
-File locking is missing from nodejs, so this rewrite of the quicklib Quick_Fifo_File only
-supports single-reader, single-writer use cases, but with evented services that might be enough.
+- QFifos are inherently single-reader, the reader owns the fifo.
+- Concurrent writes are not supported (file locking is missing from nodejs).
+  This differs from the quicklib Quick_Fifo_File that QFifo was based on.
 
 
 Api

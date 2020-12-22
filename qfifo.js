@@ -29,13 +29,14 @@ function QFifo( filename, mode ) {
     this.position = 0;          // byte offset of next line to be read
 
 
-    // TODO: move this clutter into a Reader and a Writer object
+    // TODO: move this into Reader()
     this.decoder = new sd.StringDecoder();
     this.readbuf = allocBuf(32 * 1024);
     this.seekposition = this.position;
     this.readstring = '';
     this.readoffset = 0;
 
+    // TODO: move this into Writer()
     this.writestring = '';
     this.writingCount = 0;
     this.writtenCount = 0;
@@ -138,6 +139,7 @@ QFifo.prototype._writesome = function _writesome( ) {
             var nchars = self.writestring.length;
             var buf = fromBuf(self.writestring);
             self.writestring = '';
+            // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
             fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
                 if (err) self.error = err; // and continue, to error out all the pending callbacks
                 self.writtenCount += nchars;
@@ -151,11 +153,7 @@ QFifo.prototype._writesome = function _writesome( ) {
     }
 }
 
-// node-v0.11 and up take write(fd, data, callback) but older node need (fd, buff, offset, nbytes, filepos, callback)
-// also, write() started accepting strings only with node-v0.11.5
-// var writeFd = eval('true && utils.versionCompar(process.versions.node, "0.11.5") >= 0 '+
-//     '? function writeFd(fd, data, cb) { fs.write(fd, data, cb) } ' +
-//     ': function writeFd(fd, data, cb) { var buf = utils.fromBuf(data); fs.write(fd, buf, 0, buf.length, null, cb) }');
+QFifo.prototype = toStruct(QFifo.prototype);
 
 /**
 function eoln( buf, pos ) {
@@ -163,3 +161,5 @@ function eoln( buf, pos ) {
     return -1;
 }
 **/
+
+function toStruct(hash) { return toStruct.prototype = hash }

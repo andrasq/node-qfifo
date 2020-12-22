@@ -165,21 +165,23 @@ module.exports = {
             }, 5);
         },
 
-        'fflush waits for all previous lines to be written': function(t) {
+        'fflush waits for all currently buffered lines to be written': function(t) {
             var wfifo = this.wfifo;
             var tempfile = this.tempfile;
             wfifo.putline('line1');
             wfifo.putline('line22');
             wfifo.fflush(function(err) {
                 t.ifError(err);
-                t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\n');
-                wfifo.putline('line333');
+                t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\n');
+                wfifo.putline('line4444');
                 wfifo.fflush(function(err) {
                     t.ifError(err);
-                    t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\n');
+                    t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\nline4444\n');
                     t.done();
                 })
             })
+            // a line appended here is swept by the writeDelay into the first write
+            wfifo.putline('line333');
         },
 
         'fflush returns existing fifo error': function(t) {
@@ -329,7 +331,7 @@ module.exports = {
                 for (var i=0; i<100000; i++) fifo.putline(line);
                 fifo.fflush(function(err) {
                     console.timeEnd('AR: write 100k');
-                    // about 4.3m lines / sec (single blocking burst, no yielding)
+                    // about 3.5m lines / sec (single blocking burst, no yielding) (was 4.3)
                     t.ifError(err);
                     fifo.close();
 
