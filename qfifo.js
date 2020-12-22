@@ -124,9 +124,9 @@ QFifo.prototype.getline = function getline( ) {
 QFifo.prototype._getmore = function _getmore( ) {
     if (!this.reading) {
         var self = this;
+        self.reading = true;
         this.open(function(err) {
             if (self.error) return;
-            self.reading = true;
             fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
                 if (err) { self.error = err; self.eof = true; return }
                 self.eof = (nbytes === 0);
@@ -144,9 +144,9 @@ QFifo.prototype._getmore = function _getmore( ) {
 QFifo.prototype._writesome = function _writesome( ) {
     if (!this.writing) {
         var self = this;
+        self.writing = true;
         this.open(function(err) {
             if (self.error) return;
-            self.writing = true;
             setTimeout(function writeit() {
                 var nchars = self.writestring.length;
                 var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
