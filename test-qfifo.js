@@ -3,6 +3,8 @@
 var fs = require('fs');
 var QFifo = require('./');
 
+var setImmediate = eval('global.setImmediate || process.nextTick');
+
 module.exports = {
     beforeEach: function(done) {
         this.tempfile = '/tmp/test-qfifo-' + process.pid + '.txt';
@@ -132,10 +134,7 @@ module.exports = {
                             t.ifError(err);
                             t.equal(lines.length, 100000);
                             t.done();
-                            // 16k buf: 1311 ms for 100k, 64K 340ms ie 300k lines/sec
-                            // 256k buf: 102ms (90ms if not gathering lines), 1m/s
-                            // 512k buf: 60ms gathering; 1024k 40ms, 2048k 32ms, 4096k 28ms
-                            // so up to 3.5 million lines / sec, depending on read chunk size
+                            // 16k-256k buf about 2.2m lines/sec, 4096k buf 2.5m/s
                         })
                     })
                 })
@@ -148,7 +147,8 @@ function readall( fifo, lines, cb ) {
     var line;
     (function loop() {
         while ((line = fifo.getline())) lines.push(line);
+        if (fifo.error) cb(fifo.error, lines);
         if (fifo.eof) cb(null, lines);
-        else setTimeout(loop);
+        else setImmediate(loop);
     })();
 }
