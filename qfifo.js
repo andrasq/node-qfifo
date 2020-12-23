@@ -116,16 +116,17 @@ QFifo.prototype.rsync = function rsync( callback ) {
 QFifo.prototype.getline = function getline( ) {
     var ix = this.readstring.indexOf('\n', this.readstringoffset);
     if (ix < 0) {
+        // TODO: reading multi-chunk lines is inefficient, even the indexOf() is O(n^2)
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
         this.readstringoffset = 0;
-        // TODO: this reads long lines one readSize chunk at a time, each propmted by a getline()
         this._readsome();
         return '';
     } else {
         var line = this.readstring.slice(this.readstringoffset, ix + 1);
         this.readstringoffset = ix + 1;
-        // TODO: maybe find eoln() newlines in the buffer, remember line offets
-        this.position += Buffer.byteLength(line); // track the read offset
+        if (ix > 2 * this.readSize) { this.readstring = this.readstring.slice(ix + 1); this.readstringoffset = 0 }
+        // TODO: maybe find eoln() newlines in the buffer, remember line offets (maybe qbuffer?)
+        this.position += Buffer.byteLength(line); // track the read offset, then read ahead
         if (this.readstring.length - this.readstringoffset < this.readSize / 2) this._readsome();
         return line;
     }
@@ -160,8 +161,7 @@ QFifo.prototype._writesome = function _writesome( ) {
         self.writing = true;
         this.open(function(err) {
             if (self.error) { self.writing = false; return }
-            writeit();
-            function writeit() {
+            (function writeit() {
                 var nchars = self.writestring.length;
                 var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
                 self.writestring = '';
@@ -175,7 +175,7 @@ QFifo.prototype._writesome = function _writesome( ) {
                     if (self.writestring) writeit(); // keep writing if more data arrived
                     else self.writing = false;
                 })
-            }
+            })();
         })
     }
 }
