@@ -119,14 +119,12 @@ See Also
 Todo
 ----------------
 
-- `options` instead of `accessmode`
 - `preopen` option
 - make `r`-mode `open` run `_getmore` and wait for results before returning
-- have get / put auto-open the file
 
 
 Changelog
 ----------------
 
-- 0.2.0 - constructor `options`, pass-through `options.flag`
+- 0.2.0 - constructor `options`, pass-through `options.flag`, auto-open on fifo read/write
 - 0.1.0 - first version
