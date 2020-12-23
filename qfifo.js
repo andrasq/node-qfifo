@@ -25,17 +25,17 @@ function QFifo( filename, options ) {
     this.filename = filename;
     this.headername = filename + '.hd';
     this.mode = mode === 'r' ? 'r+' : 'a+';
+
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
-
 
     // TODO: move this into Reader()
     this.decoder = new sd.StringDecoder();
     this.readbuf = allocBuf(32 * 1024);
     this.seekposition = this.position;
     this.readstring = '';
-    this.readoffset = 0;
+    this.readstringoffset = 0;
 
     // TODO: move this into Writer()
     this.writestring = '';
@@ -104,20 +104,19 @@ QFifo.prototype.rsync = function rsync( callback ) {
     fs.writeFile(this.headername, JSON.stringify(header), callback);
 }
 
-// tracking readoffset idea borrowed from qfgets
+// tracking readstringoffset idea borrowed from qfgets
 QFifo.prototype.getline = function getline( ) {
     this._getmore();
-    var self = this, ix = this.readstring.indexOf('\n', this.readoffset);
+    var ix = this.readstring.indexOf('\n', this.readstringoffset);
     if (ix < 0) {
-        if (this.readoffset > 0) this.readstring = this.readstring.slice(this.readoffset);
-        this.readoffset = 0;
+        if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
+        this.readstringoffset = 0;
         return '';
     } else {
-        var line = this.readstring.slice(this.readoffset, ix + 1);
-        this.readoffset = ix + 1;
-        // TODO: this is an inefficient but easy way to track the read offset
+        var line = this.readstring.slice(this.readstringoffset, ix + 1);
+        this.readstringoffset = ix + 1;
         // TODO: maybe find eoln() newlines in the buffer, remember line offets
-        this.position += Buffer.byteLength(line);
+        this.position += Buffer.byteLength(line); // track the read offset
         return line;
     }
 }
@@ -135,7 +134,6 @@ QFifo.prototype._getmore = function _getmore( ) {
                 self.reading = false;
                 if (nbytes > 0) {
                     self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
-                    // TODO: maybe keep track of the line starting offsets, eoln(buf)
                 }
             })
         })
