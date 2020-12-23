@@ -53,7 +53,7 @@ function QFifo( filename, options ) {
     this.writestring = '';
     this.writeSentCount = 0;
     this.writeDoneCount = 0;
-    this.writeCbs = new Array();
+    this.fflushCbs = new Array();
     this.openCbs = new Array();
     this.queuedWrite = null;
 }
@@ -103,7 +103,7 @@ QFifo.prototype.write = function write( str ) {
 QFifo.prototype.fflush = function fflush( callback ) {
     if (this.error) callback(this.error);
     else if (this.writeDoneCount >= this.writeSentCount) callback();
-    else this.writeCbs.push({ count: this.writeSentCount, cb: callback });
+    else this.fflushCbs.push({ count: this.writeSentCount, cb: callback });
 }
 
 // checkpoint the read header
@@ -169,8 +169,8 @@ QFifo.prototype._writesome = function _writesome( ) {
                 fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
                     if (err) self.error = err; // and continue, to error out all the pending callbacks
                     self.writeDoneCount += nchars;
-                    while (self.writeCbs.length && (self.writeCbs[0].count <= self.writeDoneCount || self.error)) {
-                        self.writeCbs.shift().cb(self.error);
+                    while (self.fflushCbs.length && (self.fflushCbs[0].count <= self.writeDoneCount || self.error)) {
+                        self.fflushCbs.shift().cb(self.error);
                     }
                     if (self.writestring) writeit(); // keep writing if more data arrived
                     else self.writing = false;
