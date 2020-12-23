@@ -32,7 +32,7 @@ function QFifo( filename, options ) {
 
     // TODO: move this into Reader()
     this.decoder = new sd.StringDecoder();
-    this.readbuf = allocBuf(32 * 1024);
+    this.readbuf = allocBuf(options.readSize || 32 * 1024);
     this.seekposition = this.position;
     this.readstring = '';
     this.readstringoffset = 0;
@@ -44,7 +44,8 @@ function QFifo( filename, options ) {
     this.fd = -1;
     this.reading = false;
     this.writing = false;
-    this.writeDelay = 2;
+    this.writeSize = options.writeSize || 32 * 1024;
+    this.writeDelay = options.writeDelay || 2;
     this.writeCbs = new Array();
     this.openCbs = new Array();
 }
@@ -87,6 +88,7 @@ QFifo.prototype.write = function write( str ) {
     this.writingCount += str.length;
     this.writestring += str;
     // TODO: write once writeSize has been reached
+    // TODO: apply writeDelay
     this._writesome();
 }
 

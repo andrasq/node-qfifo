@@ -36,6 +36,11 @@ whether the file will be created if missing: `a` append mode can create the file
 requires the file to already exist.  All fifos can both read and write.  Creating a new QFifo is
 a fast, it only allocates the object; the fifo must still be `open`-ed before use.
 
+If `accessmode` is an object, it may contain the following settings:
+- `readSize`: how many bytes to read at a time
+- `writeSize`: TBD
+- `writeDelay`: TBD
+
 ### fifo.open( callback(err, fd) )
 
 Open the file for use by the fifo.  Returns the file descriptor used or the open error.
