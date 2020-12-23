@@ -18,34 +18,40 @@ var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer'
 
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
+    var optionTypes = { flag: 'string', readSize: 'number', writeSize: 'number', writeDelay: 'number' };
+    for (var k in optionTypes) {
+        var value = options[k];
+        if (value !== undefined && typeof value !== optionTypes[k]) throw new Error(k + ': must be a ' + optionTypes[k]);
+    }
+    if (!filename) throw new Error('missing filename');
     var flag = options.flag || 'r';
     if (flag[0] !== 'r' && flag[0] !== 'a') throw new Error(flag + ": bad open mode, expected 'r' or 'a'");
-    if (!filename) throw new Error('missing filename');
 
     this.filename = filename;
     this.headername = filename + '.hd';
     this.flag = flag;
+    this.fd = -1;
 
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
 
     // TODO: move this into Reader()
+    this.reading = false;
+    this.readSize = options.readSize || 32 * 1024;
+    this.readbuf = allocBuf(this.readSize);
     this.decoder = new sd.StringDecoder();
-    this.readbuf = allocBuf(options.readSize || 32 * 1024);
     this.seekposition = this.position;
     this.readstring = '';
     this.readstringoffset = 0;
 
     // TODO: move this into Writer()
-    this.writestring = '';
-    this.writingCount = 0;
-    this.writtenCount = 0;
-    this.fd = -1;
-    this.reading = false;
     this.writing = false;
     this.writeSize = options.writeSize || 32 * 1024;
     this.writeDelay = options.writeDelay || 2;
+    this.writestring = '';
+    this.writingCount = 0;
+    this.writtenCount = 0;
     this.writeCbs = new Array();
     this.openCbs = new Array();
 }

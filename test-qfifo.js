@@ -30,6 +30,15 @@ module.exports = {
         },
         'rejects invalid open mode': function(t) {
             t.throws(function() { new QFifo('/nonesuch', 'w') }, /open mode/);
+            t.throws(function() { new QFifo('/nonesuch', { flag: 'w' }) }, /open mode/);
+            t.done();
+        },
+        'rejects non-numeric options': function(t) {
+            t.throws(function() { new QFifo(__filename, { flag: 600 }) }, /flag.*string/);
+            t.throws(function() { new QFifo(__filename, { readSize: null }) }, /readSize.*number/);
+            t.throws(function() { new QFifo(__filename, { readSize: '765' }) }, /readSize.*number/);
+            t.throws(function() { new QFifo(__filename, { writeSize: null }) }, /writeSize.*number/);
+            t.throws(function() { new QFifo(__filename, { writeDelay: null }) }, /writeDelay.*number/);
             t.done();
         },
     },
