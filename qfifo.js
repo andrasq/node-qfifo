@@ -48,7 +48,7 @@ function QFifo( filename, options ) {
 
     // TODO: move this into Writer()
     this.writing = false;
-    this.writeSize = options.writeSize || 32 * 1024;
+    this.writeSize = options.writeSize || 16 * 1024;
     this.writeDelay = options.writeDelay || 2;
     this.writestring = '';
     this.writingCount = 0;

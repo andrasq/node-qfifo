@@ -423,28 +423,27 @@ module.exports = {
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n';
-            fifo.open(function(err, fd) {
-                t.ifError(err);
-                console.time('AR: write 200B x100k');
-                for (var i=0; i<100000; i++) fifo.putline(line);
-                fifo.fflush(function(err) {
-                    console.timeEnd('AR: write 200B x100k');
-                    // about 3.5m lines / sec (single blocking burst, no yielding) (was 4.3)
-                    t.ifError(err);
-                    fifo.close();
 
-                    fifo = new QFifo(tempfile, 'r');
-                    console.time('AR: read 200B x100k');
-                    fifo.open(function(err, fd) {
-                        t.ifError(err);
-                        readall(fifo, new Array(), function(err, lines) {
-                            console.timeEnd('AR: read 200B x100k');
-                            t.ifError(err);
-                            t.equal(lines.length, 100000);
-                            t.done();
-                            // 16k-256k buf about 2.2m lines/sec, 4096k buf 2.5m/s
-                        })
-                    })
+            console.time('AR: write 200B x100k');
+            for (var i=0; i<100000; i++) fifo.putline(line);
+            fifo.fflush(function(err) {
+                console.timeEnd('AR: write 200B x100k');
+                // about 3.2m lines / sec, 31ms (single blocking burst, no yielding) (had been as much as 4.3m/s, 23ms)
+
+                t.ifError(err);
+                t.ifError(fifo.error);
+                fifo.close();
+                fifo = new QFifo(tempfile, 'r');
+
+                console.time('AR: read 200B x100k');
+                readall(fifo, new Array(), function(err, lines) {
+                    console.timeEnd('AR: read 200B x100k');
+
+                    t.ifError(err);
+                    t.ifError(fifo.error);
+                    t.equal(lines.length, 100000);
+                    t.done();
+                    // 32k and larger buf about 2.5m lines/sec
                 })
             })
         },
