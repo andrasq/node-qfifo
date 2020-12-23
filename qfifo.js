@@ -69,7 +69,7 @@ QFifo.prototype.open = function open( callback ) {
             if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
             fs.readFile(self.headername, function(err2, header) {
                 try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
-                self.position = self.seekposition = header.position || 0;
+                self.position = self.seekposition = header.position > 0 ? Number(header.position) : 0;
                 self.eof = false;
                 self.error = null;
                 _runCallbacks(self.openCbs, err, self.fd);
