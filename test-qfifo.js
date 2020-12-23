@@ -443,11 +443,14 @@ module.exports = {
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n';
 
+            // NOTE: map() and forEach() skip unset elements, but Array.from() can filter
+            var lines = Array.from(new Array(100000), function(e, i) { return line });
+
             console.time('AR: write 200B x100k');
-            for (var i=0; i<100000; i++) fifo.putline(line);
-            fifo.fflush(function(err) {
+            writeall(fifo, lines, function(err) {
                 console.timeEnd('AR: write 200B x100k');
-                // about 3.2m lines / sec, 31ms (single blocking burst, no yielding) (had been as much as 4.3m/s, 23ms)
+                // about 3.2m lines / sec, 31ms if single 20mb burst
+                // 4.6m/s, 21ms if yielding the cpu after every 100 lines
 
                 t.ifError(err);
                 t.ifError(fifo.error);
@@ -482,8 +485,10 @@ function readall( fifo, lines, cb ) {
 function writeall( fifo, lines, cb ) {
     var i = 0;
     (function loop() {
+        // TODO: writing 200 200B lines with a 16k write buffer runs at 5m lines / sec
+        // TODO: Try to capture this in the writeSize chunking logic
+        for (var j=0; j<200; j++) if (i < lines.length) fifo.putline(lines[i++]);
         if (i >= lines.length) return fifo.fflush(cb);
-        fifo.putline(lines[i++]);
         setImmediate(loop);
     })();
 }

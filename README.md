@@ -121,6 +121,7 @@ Todo
 
 - `preopen` option
 - make `r`-mode `open` run `_getmore` and wait for results before returning
+- allow for streaming Buffers straight to file
 
 
 Changelog
