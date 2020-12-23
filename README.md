@@ -127,5 +127,6 @@ Todo
 Changelog
 ----------------
 
+- 0.2.2 - allow writing Buffers
 - 0.2.1 - constructor `options`, pass-through `options.flag`, auto-open on fifo read/write, faster rsync
 - 0.1.0 - first version

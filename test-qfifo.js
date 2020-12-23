@@ -9,6 +9,7 @@ var fs = require('fs');
 var QFifo = require('./');
 
 var setImmediate = eval('global.setImmediate || process.nextTick');
+var fromBuf = Buffer.from ? Buffer.from : Buffer;
 
 module.exports = {
     beforeEach: function(done) {
@@ -435,6 +436,30 @@ module.exports = {
     },
 
     'speed': {
+        'write 1m lines': function(t) {
+            var fifo = new QFifo(this.tempfile, 'a');
+            var buf = fromBuf('x\n');
+            var buflines = new Array(1000000); for (var i=0; i<buflines.length; i++) buflines[i] = buf;
+            var strlines = new Array(1000000); for (var i=0; i<strlines.length; i++) strlines[i] = 'x\n';
+            var mixlines = new Array(1000000); for (var i=0; i<strlines.length; i+=2) { mixlines[i] = 'x\n'; mixlines[i+1] = buf }
+            runSteps([
+                function(next) { console.time('AR: write 1m bufs'); next() },
+                function(next) { writeall(fifo, buflines, next) },
+                function(next) { console.timeEnd('AR: write 1m bufs'); next() },
+                // 175ms / 1m buffers
+
+                function(next) { console.time('AR: write 1m strs'); next() },
+                function(next) { writeall(fifo, strlines, next) },
+                function(next) { console.timeEnd('AR: write 1m strs'); next() },
+                // 50ms / 1m strings (65ms/m standalone)
+
+                function(next) { console.time('AR: write 1m mixs'); next() },
+                function(next) { writeall(fifo, mixlines, next) },
+                function(next) { console.timeEnd('AR: write 1m mixs'); next() },
+                // 100ms / 1m mixed, ie no penalty for mix-and-match
+            ], t.done);
+        },
+
         'write 100k 200B lines, then read them': function(t) {
             var tempfile = this.tempfile;
             var fifo = new QFifo(tempfile, 'a');
@@ -444,7 +469,7 @@ module.exports = {
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n';
 
             // NOTE: map() and forEach() skip unset elements, but Array.from() can filter
-            var lines = Array.from(new Array(100000), function(e, i) { return line });
+            var lines = new Array(100000); for (var i=0; i<lines.length; i++) lines[i] = line;
 
             console.time('AR: write 200B x100k');
             writeall(fifo, lines, function(err) {

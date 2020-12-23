@@ -85,6 +85,8 @@ QFifo.prototype.close = function close( ) {
 QFifo.prototype.putline = function putline( str ) {
     // faster to append a newline here than to write a newline separately,
     // even though both are just concatenated to this.writestring.
+    // TODO: allow for Buffers without converting first (to stream incoming data to fifo)
+    if (Buffer.isBuffer(str)) str = str.toString();
     if (str[str.length - 1] !== '\n') str += '\n';
     this.write(str);
 }
