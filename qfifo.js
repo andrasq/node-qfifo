@@ -87,8 +87,7 @@ QFifo.prototype.putline = function putline( str ) {
     // even though both are just concatenated to this.writestring.
     // TODO: allow for Buffers without converting first (to stream incoming data to fifo)
     if (Buffer.isBuffer(str)) str = str.toString();
-    if (str[str.length - 1] !== '\n') str += '\n';
-    this.write(str);
+    str[str.length - 1] === '\n' ? this.write(str) : this.write(str + '\n');
 }
 
 QFifo.prototype.write = function write( str ) {
