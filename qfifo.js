@@ -117,17 +117,19 @@ QFifo.prototype.rsync = function rsync( callback ) {
 
 // tracking readstringoffset idea borrowed from qfgets
 QFifo.prototype.getline = function getline( ) {
-    if (this.readstring.length < 4 * this.readSize) this._readsome();
     var ix = this.readstring.indexOf('\n', this.readstringoffset);
     if (ix < 0) {
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
         this.readstringoffset = 0;
+        // TODO: this reads long lines one readSize chunk at a time, each propmted by a getline()
+        this._readsome();
         return '';
     } else {
         var line = this.readstring.slice(this.readstringoffset, ix + 1);
         this.readstringoffset = ix + 1;
         // TODO: maybe find eoln() newlines in the buffer, remember line offets
         this.position += Buffer.byteLength(line); // track the read offset
+        if (this.readstring.length - this.readstringoffset < this.readSize / 2) this._readsome();
         return line;
     }
 }
@@ -138,15 +140,19 @@ QFifo.prototype._readsome = function _readsome( ) {
         self.reading = true;
         this.open(function(err) {
             if (self.error) { self.reading = false; return }
-            fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
-                if (err) { self.error = err; self.eof = true; return }
-                self.eof = (nbytes === 0);
-                self.seekposition += nbytes;
-                self.reading = false;
-                if (nbytes > 0) {
-                    self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
-                }
-            })
+            (function readit() {
+                fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
+                    if (err) { self.error = err; self.eof = true; return }
+                    self.eof = (nbytes === 0);
+                    self.seekposition += nbytes;
+                    if (nbytes > 0) {
+                        self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
+                    }
+                    // if the read pipeline is draining low, kick off another read to refill it
+                    if (!self.eof && self.readstring.length < self.readSize / 2) readit();
+                    else self.reading = false;
+                })
+            })();
         })
     }
 }

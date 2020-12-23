@@ -298,7 +298,8 @@ module.exports = {
                             setTimeout(function() {
                                 // see the new data, and because there was data no more eof
                                 t.equal(fifo.getline(), 'line333\n');
-                                t.equal(fifo.eof, false);
+                                // note: fifo.eof will be set if readahead tried twice in the past 5ms
+                                // t.equal(fifo.eof, false);
                                 t.done();
                             }, 5)
                         }, 5)
@@ -424,20 +425,20 @@ module.exports = {
                        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n';
             fifo.open(function(err, fd) {
                 t.ifError(err);
-                console.time('AR: write 100k');
+                console.time('AR: write 200B x100k');
                 for (var i=0; i<100000; i++) fifo.putline(line);
                 fifo.fflush(function(err) {
-                    console.timeEnd('AR: write 100k');
+                    console.timeEnd('AR: write 200B x100k');
                     // about 3.5m lines / sec (single blocking burst, no yielding) (was 4.3)
                     t.ifError(err);
                     fifo.close();
 
                     fifo = new QFifo(tempfile, 'r');
-                    console.time('AR: read 100k');
+                    console.time('AR: read 200B x100k');
                     fifo.open(function(err, fd) {
                         t.ifError(err);
                         readall(fifo, new Array(), function(err, lines) {
-                            console.timeEnd('AR: read 100k');
+                            console.timeEnd('AR: read 200B x100k');
                             t.ifError(err);
                             t.equal(lines.length, 100000);
                             t.done();
