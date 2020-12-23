@@ -317,11 +317,11 @@ module.exports = {
     },
 
     'helpers': {
-        '_getmore': {
+        '_readsome': {
             'sets the `fifo.reading` flag as a mutex': function(t) {
                 var fifo = this.rfifo;
                 t.equal(fifo.reading, false);
-                fifo._getmore();
+                fifo._readsome();
                 t.equal(fifo.reading, true);
                 setTimeout(function() {
                     t.equal(fifo.reading, false);
@@ -333,7 +333,7 @@ module.exports = {
                 var fifo = this.rfifo;
                 fifo.eof = false;
                 var spy = t.stubOnce(fs, 'read').yields(null, 0);
-                fifo._getmore();
+                fifo._readsome();
                 setTimeout(function() {
                     t.ok(spy.called);
                     t.equal(fifo.eof, true);
@@ -343,7 +343,7 @@ module.exports = {
             'sets fifo.error on read error': function(t) {
                 var fifo = this.rfifo;
                 var spy = t.stubOnce(fs, 'read').yields('mock-read-error');
-                fifo._getmore();
+                fifo._readsome();
                 setTimeout(function() {
                     t.ok(spy.called);
                     t.equal(fifo.error, 'mock-read-error');
@@ -354,7 +354,7 @@ module.exports = {
                 var fifo = this.rfifo;
                 fifo.error = 'mock-read-error';
                 var spy = t.spy(fs, 'read');
-                fifo._getmore();
+                fifo._readsome();
                 t.equal(fifo.reading, false);
                 setTimeout(function() {
                     spy.restore();
