@@ -8,8 +8,8 @@ var setImmediate = eval('global.setImmediate || process.nextTick');
 module.exports = {
     beforeEach: function(done) {
         this.tempfile = '/tmp/test-qfifo-' + process.pid + '.txt';
-        var rfifo = this.rfifo = new QFifo(this.tempfile, 'r');
-        var wfifo = this.wfifo = new QFifo(this.tempfile, 'a');
+        var rfifo = this.rfifo = new QFifo(this.tempfile, 'r+');
+        var wfifo = this.wfifo = new QFifo(this.tempfile, 'a+');
         // pre-create the file else read fifos error out on open
         fs.writeFileSync(this.tempfile, "");
         done();

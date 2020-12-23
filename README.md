@@ -29,15 +29,16 @@ efficiently feed the ingest process that consumes it.
 Api
 ----------------
 
-### fifo = new QFifo( filename, accessmode )
+### fifo = new QFifo( filename, options )
 
 Create a fifo for reading or appending the named file.  Mode must be `'r'` or `'a'` to control
 whether the file will be created if missing: `a` append mode can create the file, `r` read mode
 requires the file to already exist.  All fifos can both read and write.  Creating a new QFifo is
 a fast, it only allocates the object; the fifo must still be `open`-ed before use.
 
-If `accessmode` is an object, it may contain the following settings:
-- `readSize`: how many bytes to read at a time
+Options may contain the following settings:
+- `flag`: open mode flag for `fs.open()`, default `'r'`.
+- `readSize`: how many bytes to read at a time, default 32K.
 - `writeSize`: TBD
 - `writeDelay`: TBD
 
@@ -45,6 +46,8 @@ If `accessmode` is an object, it may contain the following settings:
 
 Open the file for use by the fifo.  Returns the file descriptor used or the open error.
 The fifo has no lines yet after the open, reading is started by the first `getline()`.
+It is safe to open the fifo than once, the duplicate calls are harmless.  Note that
+`getline` and `putline` will open the file if it hasn't been already.
 
 ### fifo.close( )
 
@@ -77,18 +80,14 @@ that zero bytes were read from the file.  Retrying the read may clear the eof fl
 are saved in `fifo.error` and stop the file being read.
 
     var readFile(filename, callback) {
+        var fifo = new QFifo(filename, { flag: 'r', readSize: 256 * 1024 });
         var contents = '';
-        var fifo = new QFifo(filename, 'r');
-        fifo.open(function(err) {
-            if (err) callback(err);
-            else readLines();
-            function readLines() {
-                for (var i=0; i<100; i++) contents += fifo.getline();
-                if (fifo.error || fifo.eof) callback(fifo.error, contents);
-                // yield the cpu so the fifo can read more of the file
-                else setImmediate(readLines);
-            }
-        })
+        (function readLines() {
+            for (var i=0; i<100; i++) contents += fifo.getline();
+            if (fifo.error || fifo.eof) callback(fifo.error, contents);
+            // yield the cpu so the fifo can read more of the file
+            else setTimeout(readLines);
+        })();
     }
 
 ### fifo.rsync( callback )
@@ -129,4 +128,5 @@ Todo
 Changelog
 ----------------
 
+- 0.2.0 - constructor `options`, pass-through `options.flag`
 - 0.1.0 - first version

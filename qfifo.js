@@ -17,14 +17,14 @@ var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe :
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 
 function QFifo( filename, options ) {
-    if (typeof options !== 'object') options = { mode: options };
-    var mode = options.mode || 'r';
-    if (mode[0] !== 'r' && mode[0] !== 'a') throw new Error(mode + ": bad open mode, expected 'r' or 'a'");
+    if (typeof options !== 'object') options = { flag: options };
+    var flag = options.flag || 'r';
+    if (flag[0] !== 'r' && flag[0] !== 'a') throw new Error(flag + ": bad open mode, expected 'r' or 'a'");
     if (!filename) throw new Error('missing filename');
 
     this.filename = filename;
     this.headername = filename + '.hd';
-    this.mode = mode === 'r' ? 'r+' : 'a+';
+    this.flag = flag;
 
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
@@ -56,7 +56,7 @@ QFifo.prototype.open = function open( callback ) {
     this.openCbs.push(callback);
     if (this.fd === -1) {
         this.fd = -2;
-        fs.open(this.filename, this.mode, function(err, fd) {
+        fs.open(this.filename, this.flag, function(err, fd) {
             self.fd = err ? -1 : fd;
             if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
             fs.readFile(self.headername, function(err2, header) {
