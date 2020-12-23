@@ -108,7 +108,7 @@ QFifo.prototype.rsync = function rsync( callback ) {
 
 // tracking readstringoffset idea borrowed from qfgets
 QFifo.prototype.getline = function getline( ) {
-    this._readsome();
+    if (this.readstring.length < 4 * this.readSize) this._readsome();
     var ix = this.readstring.indexOf('\n', this.readstringoffset);
     if (ix < 0) {
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
