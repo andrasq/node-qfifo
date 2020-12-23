@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2020 Andras Radics
+ * Licensed under the Apache License, Version 2.0
+ */
+
 'use strict'
 
 var fs = require('fs');
@@ -115,7 +120,7 @@ module.exports = {
             var lines = fs.readFileSync(__filename).toString()
                 .split('\n').slice(0, 10)
                 .map(function(line) { return line + '\n' });
-            var spy = t.stubOnce(fs, 'readFile').yields(null, '{"position":14}');
+            var spy = t.stubOnce(fs, 'readFile').yields(null, '{"position":' + (lines[0].length + lines[1].length) + '}');
             fifo.open(function(err, fd) {
                 t.ifError(err);
                 t.equal(fifo.position, lines[0].length + lines[1].length);

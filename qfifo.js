@@ -1,7 +1,8 @@
 /*
- * qfifo -- yet another stab
+ * qfifo -- quick file-based fifo to buffer newline terminated data
  *
- * Half-fifos: can be written or read, but not both at the same time.
+ * Copyright (C) 2020 Andras Radics
+ * Licensed under the Apache License, Version 2.0
  *
  * 2020-12-20 - AR.
  */
