@@ -262,6 +262,25 @@ module.exports = {
             })
         },
 
+        'can read and write very long lines': function(t) {
+            var str = new Array(1e6).join('x') + '\n';
+            var fifo = this.wfifo;
+            console.time('AR: write 1mb x10');
+            writeall(fifo, [str, str, str, str, str, str, str, str, str, str], function(err) {
+                console.timeEnd('AR: write 1mb x10');
+                // 8ms to write 10mb
+                t.ifError(err);
+                console.time('AR: read 1mb x10');
+                readall(fifo, [], function(err, lines) {
+                    console.timeEnd('AR: read 1mb x10');
+                    // 68ms to read 10mb (chunk combining)
+                    t.ifError(err);
+                    t.deepEqual(lines, [str, str, str, str, str, str, str, str, str, str]);
+                    t.done();
+                })
+            })
+        },
+
         'can read and write the same fifo': function(t) {
             var fifo = this.wfifo;
 
@@ -457,6 +476,15 @@ function readall( fifo, lines, cb ) {
         if (fifo.error) cb(fifo.error, lines);
         if (fifo.eof) cb(null, lines);
         else setImmediate(loop);
+    })();
+}
+
+function writeall( fifo, lines, cb ) {
+    var i = 0;
+    (function loop() {
+        if (i >= lines.length) return fifo.fflush(cb);
+        fifo.putline(lines[i++]);
+        setImmediate(loop);
     })();
 }
 
