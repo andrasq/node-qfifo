@@ -109,10 +109,9 @@ QFifo.prototype.fflush = function fflush( callback ) {
 }
 
 // checkpoint the read header
-// Note: this version is kinda slow, do not call often.
 QFifo.prototype.rsync = function rsync( callback ) {
     var header = { position: this.position };
-    fs.writeFile(this.headername, JSON.stringify(header), callback);
+    try { writeFileSync(this.headername, JSON.stringify(header)); callback() } catch (e) { callback(e) }
 }
 
 // tracking readstringoffset idea borrowed from qfgets
@@ -191,5 +190,12 @@ function eoln( buf, pos ) {
     return -1;
 }
 **/
+
+// 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+'
+function writeFileSync( filename, contents ) {
+    try { var fd = fs.openSync(filename, 'r+') } catch (e) { var fd = fs.openSync(filename, 'w') }
+    var buf = fromBuf(contents);
+    return fs.writeSync(fd, buf, 0, buf.length, null);
+}
 
 function toStruct(hash) { return toStruct.prototype = hash }

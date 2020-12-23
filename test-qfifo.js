@@ -416,7 +416,7 @@ module.exports = {
     },
 
     'speed': {
-        'write 100k 200B lines': function(t) {
+        'write 100k 200B lines, then read them': function(t) {
             var tempfile = this.tempfile;
             var fifo = new QFifo(tempfile, 'a');
             var line = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
