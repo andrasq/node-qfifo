@@ -55,6 +55,7 @@ function QFifo( filename, options ) {
     this.writtenCount = 0;
     this.writeCbs = new Array();
     this.openCbs = new Array();
+    this.queuedWrite = null;
 }
 
 QFifo.prototype.open = function open( callback ) {
@@ -94,9 +95,10 @@ QFifo.prototype.write = function write( str ) {
     // faster to concat strings and write less (1.4mb in 14 vs 56 char chunks: .35 vs .11 sec)
     this.writingCount += str.length;
     this.writestring += str;
-    // TODO: write once writeSize has been reached
-    // TODO: apply writeDelay
-    this._writesome();
+    var self = this;
+    if (this.writestring.length > this.writeSize) this._writesome();
+    else if (!this.queuedWrite) this.queuedWrite =
+        setTimeout(function() { self.queuedWrite = null; self._writesome() }, this.writeDelay);
 }
 
 // push the written data to the file
