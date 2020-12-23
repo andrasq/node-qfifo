@@ -62,20 +62,18 @@ QFifo.prototype.open = function open( callback ) {
     var self = this;
     if (this.fd >= 0 || this.error) return callback(this.error, this.fd);
     this.openCbs.push(callback);
-    if (this.fd === -1) {
-        this.fd = -2;
-        fs.open(this.filename, this.flag, function(err, fd) {
-            self.fd = err ? -1 : fd;
-            if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
-            fs.readFile(self.headername, function(err2, header) {
-                try { var header = JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
-                self.position = self.seekposition = header.position > 0 ? Number(header.position) : 0;
-                self.eof = false;
-                self.error = null;
-                _runCallbacks(self.openCbs, err, self.fd);
-            })
-        });
-    }
+    if (this.fd === -1) this.fd = -2; else return; // mutex the openers
+    fs.open(this.filename, this.flag, function(err, fd) {
+        self.fd = err ? -1 : fd;
+        if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
+        fs.readFile(self.headername, function(err2, header) {
+            try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
+            self.position = self.seekposition = header.position >= 0 ? Number(header.position) : 0;
+            self.eof = false;
+            self.error = null;
+            _runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
+        })
+    })
     function _runCallbacks(cbs, err, ret) { while (cbs.length) cbs.shift()(err, ret) }
 }
 
@@ -85,14 +83,14 @@ QFifo.prototype.close = function close( ) {
 }
 
 QFifo.prototype.putline = function putline( str ) {
-    // faster to append a newline to the string than to write a newline separately,
+    // faster to append a newline here than to write a newline separately,
     // even though both are just concatenated to this.writestring.
     if (str[str.length - 1] !== '\n') str += '\n';
     this.write(str);
 }
 
 QFifo.prototype.write = function write( str ) {
-    // faster to concat strings and write less (1.4mb in 14 vs 56 char chunks: .35 vs .11 sec)
+    // faster to concat strings and write less often
     this.writingCount += str.length;
     this.writestring += str;
     var self = this;
