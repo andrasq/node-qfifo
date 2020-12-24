@@ -266,17 +266,18 @@ module.exports = {
         'can read and write very long lines': function(t) {
             var str = new Array(1e6).join('x') + '\n';
             var fifo = this.wfifo;
-            console.time('AR: write 1mb x10');
-            writeall(fifo, [str, str, str, str, str, str, str, str, str, str], function(err) {
-                console.timeEnd('AR: write 1mb x10');
+            var lines = []; for (var i=0; i<20; i++) lines[i] = str;
+            console.time('AR: write 1mb x20');
+            writeall(fifo, lines, function(err) {
+                console.timeEnd('AR: write 1mb x20');
                 // 8ms to write 10mb
                 t.ifError(err);
-                console.time('AR: read 1mb x10');
-                readall(fifo, [], function(err, lines) {
-                    console.timeEnd('AR: read 1mb x10');
+                console.time('AR: read 1mb x20');
+                readall(fifo, [], function(err, readLines) {
+                    console.timeEnd('AR: read 1mb x20');
                     // 68ms to read 10mb (chunk combining)
                     t.ifError(err);
-                    t.deepEqual(lines, [str, str, str, str, str, str, str, str, str, str]);
+                    t.deepEqual(readLines, lines);
                     t.done();
                 })
             })
