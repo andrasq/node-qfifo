@@ -3,7 +3,7 @@ qfifo
 [![Build Status](https://travis-ci.org/andrasq/node-qfifo.svg?branch=master)](https://travis-ci.org/andrasq/node-qfifo)
 <!-- [![Coverage Status](https://coveralls.io/repos/github/andrasq/node-qfifo/badge.svg?branch=master)](https://coveralls.io/github/andrasq/node-qfifo?branch=master) -->
 
-Quick file-based fifo to buffer newline terminated string data, designed to be a very low
+Quick file-based fifo to buffer newline terminated strings, designed to be a very low
 overhead, very fast local journal that can both quickly persist large volumes of data and
 efficiently feed the ingest process that consumes it.
 
@@ -13,16 +13,16 @@ efficiently feed the ingest process that consumes it.
 - Synchronous calls, asynchronous file i/o.
 - Efficient batched file reads and writes.
 - Very high throughput, hundreds of megabytes of data per second.
-- Universally supported, very easy, very fast newline terminated plaintext format.
+- Universally supported, very easy, very fast newline terminated plaintext data format.
 - Metadata is optional, and is kept alongside in a separate file.  Only the consumer
   might need metadata.
 - No external dependencies.
-- Works with node-v0.6 and up.
+- Tested to work with node-v0.6 and up.
 
 ## Limitations
 
 - QFifos are inherently single-reader, the consuming process owns the fifo.
-- Single-writer, concurrent writes are not supported. (File locking is missing from nodejs, so
+- Single-writer; concurrent writes are not supported. (File locking is missing from nodejs, so
   this incarnation differs from quicklib Quick_Fifo_File that it was based on.)
 
 
@@ -34,7 +34,8 @@ Api
 Create a fifo for reading or appending the named file.  Mode must be `'r'` or `'a'` to control
 whether the file will be created if missing: `a` append mode can create the file, `r` read mode
 requires the file to already exist.  All fifos can both read and write.  Creating a new QFifo is
-a fast, it only allocates the object; the fifo must still be `open`-ed before use.
+a fast, it only allocates the object; the fifo must still be `open`-ed before use.  Note that
+`putline` and `getline` automatically open the fifo.
 
 Options may contain the following settings:
 - `flag`: open mode flag for `fs.open()`, default `'r'`.
@@ -46,7 +47,7 @@ Options may contain the following settings:
 
 Open the file for use by the fifo.  Returns the file descriptor used or the open error.
 The fifo has no lines yet after the open, reading is started by the first `getline()`.
-It is safe to open the fifo than once, the duplicate calls are harmless.  Note that
+It is safe to open the fifo more than once, the duplicate calls are harmless.  Note that
 `getline` and `putline` will open the file if it hasn't been already.
 
 ### fifo.close( )
