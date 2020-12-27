@@ -218,6 +218,14 @@ module.exports = {
             }, 5);
         },
 
+        'rsync returns write error': function(t) {
+            t.stubOnce(fs, 'writeSync').throws('mock-write-error');
+            this.rfifo.rsync(function(err) {
+                t.equal(err, 'mock-write-error');
+                t.done();
+            })
+        },
+
         'fflush waits for all currently buffered lines to be written': function(t) {
             var wfifo = this.wfifo;
             var tempfile = this.tempfile;
