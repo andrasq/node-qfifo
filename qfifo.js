@@ -39,7 +39,7 @@ function QFifo( filename, options ) {
 
     // TODO: move this into Reader()
     this.reading = false;
-    this.readSize = options.readSize || 32 * 1024;
+    this.readSize = options.readSize || 64 * 1024;
     this.readbuf = allocBuf(this.readSize);
     this.decoder = new sd.StringDecoder();
     this.seekposition = this.position;

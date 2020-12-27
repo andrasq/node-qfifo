@@ -477,6 +477,7 @@ module.exports = {
                 console.timeEnd('AR: write 200B x100k');
                 // about 3.2m lines / sec, 31ms if single 20mb burst
                 // 4.6m/s, 21ms if yielding the cpu after every 100 lines
+                // 5600x 4.9g: 6.0m/s, 16ms yielding every 200
 
                 t.ifError(err);
                 t.ifError(fifo.error);
@@ -492,6 +493,7 @@ module.exports = {
                     t.equal(lines.length, 100000);
                     t.done();
                     // 32k and larger buf about 2.5m lines/sec
+                    // 5600x 4.9g: 3.7m/s, 26ms
                 })
             })
         },

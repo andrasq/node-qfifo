@@ -39,7 +39,7 @@ a fast, it only allocates the object; the fifo must still be `open`-ed before us
 
 Options may contain the following settings:
 - `flag`: open mode flag for `fs.open()`, default `'r'`.
-- `readSize`: how many bytes to read at a time, default 32K.
+- `readSize`: how many bytes to read at a time, default 64K.
 - `writeSize`: TBD
 - `writeDelay`: TBD
 
