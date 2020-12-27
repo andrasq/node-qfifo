@@ -263,6 +263,46 @@ module.exports = {
             })
         },
 
+        'can read split multi-char utf8 characters': {
+            'split start char': function(t) {
+                var fifo = new QFifo(this.tempfile);
+                fifo.getline();
+                setTimeout(function() {
+                    t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {
+                        buf[start] = 0x41; buf[start + 1] = 0xCF; cb(null, 2) });
+                    fifo.getline();
+                    setTimeout(function() {
+                        t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {
+                            buf[start] = 0x80; buf[start + 1] = 0x42; buf[start + 2] = 0x0A; cb(null, 3) });
+                        fifo.getline();
+                        setImmediate(function() {
+                            t.equal(fifo.getline(), 'A\u03C0B\n');
+                            t.done();
+                        });
+                    }, 5);
+                }, 5);
+            },
+
+            'split last char': function(t) {
+                var fifo = new QFifo(this.tempfile);
+                fifo.getline();
+                setTimeout(function() {
+                    t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {
+                        buf[start] = 0x41; buf[start + 1] = 0xCF; buf[start + 2] = 0x80; cb(null, 3) });
+                    fifo.getline();
+                    setTimeout(function() {
+                        t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {
+                            buf[start] = 0x42; buf[start + 1] = 0x0A; cb(null, 2) });
+                        fifo.getline();
+                        setImmediate(function() {
+                            t.equal(fifo.getline(), 'A\u03C0B\n');
+                            t.done();
+                        });
+                    }, 5);
+                }, 5);
+            },
+        },
+
         'can read and write very long lines': function(t) {
             var str = new Array(1e6).join('x') + '\n';
             var fifo = this.wfifo;
