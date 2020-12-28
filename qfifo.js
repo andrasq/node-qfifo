@@ -43,7 +43,7 @@ function QFifo( filename, options ) {
     this.readSize = options.readSize || 64 * 1024;
     this.readbuf = allocBuf(this.readSize);
     this.decoder = new sd.StringDecoder();
-    this.seekposition = this.position;
+    this.seekoffset = this.position;
     this.readstring = '';
     this.readstringoffset = 0;
 
@@ -52,7 +52,7 @@ function QFifo( filename, options ) {
     this.writeSize = options.writeSize || 16 * 1024;
     this.writeDelay = options.writeDelay || 2;
     this.writestring = '';
-    this.writeSentCount = 0;
+    this.writePendingCount = 0;
     this.writeDoneCount = 0;
     this.fflushCbs = new Array();
     this.openCbs = new Array();
@@ -69,7 +69,7 @@ QFifo.prototype.open = function open( callback ) {
         if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
         fs.readFile(self.headername, function(err2, header) {
             try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
-            self.position = self.seekposition = header.position >= 0 ? Number(header.position) : 0;
+            self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : 0;
             self.eof = false;
             self.error = null;
             _runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
@@ -93,7 +93,7 @@ QFifo.prototype.putline = function putline( str ) {
 
 QFifo.prototype.write = function write( str ) {
     // faster to concat strings and write less often
-    this.writeSentCount += str.length;
+    this.writePendingCount += str.length;
     this.writestring += str;
     var self = this;
     if (this.writestring.length >= this.writeSize) this._writesome();
@@ -104,8 +104,8 @@ QFifo.prototype.write = function write( str ) {
 // push the written data to the file
 QFifo.prototype.fflush = function fflush( callback ) {
     if (this.error) callback(this.error);
-    else if (this.writeDoneCount >= this.writeSentCount) callback();
-    else this.fflushCbs.push({ count: this.writeSentCount, cb: callback });
+    else if (this.writeDoneCount >= this.writePendingCount) callback();
+    else this.fflushCbs.push({ awaitCount: this.writePendingCount, cb: callback });
 }
 
 // checkpoint the read header
@@ -118,8 +118,7 @@ QFifo.prototype.rsync = function rsync( callback ) {
 QFifo.prototype.getline = function getline( ) {
     var eol = this.readstring.indexOf('\n', this.readstringoffset);
     if (eol >= 0) {
-        var line = this.readstring.slice(this.readstringoffset, eol + 1);
-        this.readstringoffset = eol + 1;
+        var line = this.readstring.slice(this.readstringoffset, this.readstringoffset = eol + 1);
         this.position += Buffer.byteLength(line);
         return line;
     } else {
@@ -136,11 +135,11 @@ QFifo.prototype._readsome = function _readsome( ) {
     this.reading ? 'already reading, only one at a time' : (this.reading = true, this.open(readchunk));
     function readchunk() {
         if (self.error) { self.reading = false; return }
-        fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
+        fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekoffset, function(err, nbytes) {
             self.reading = false;
             if (err) { self.error = err; self.eof = true; return }
             self.eof = (nbytes === 0);
-            self.seekposition += nbytes;
+            self.seekoffset += nbytes;
             var wasEmpty = !self.readstring;
             self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
             // if first read into empty buffer, read ahead next chunk
@@ -160,9 +159,10 @@ QFifo.prototype._writesome = function _writesome( ) {
         fs.write(self.fd, writebuf, 0, writebuf.length, null, function(err, nbytes) {
             if (err) self.error = err; // and continue, to error out the pending callbacks
             self.writeDoneCount += nchars;
-            while (self.fflushCbs.length && (self.fflushCbs[0].count <= self.writeDoneCount || self.error)) {
+            while (self.fflushCbs.length && (self.fflushCbs[0].awaitCount <= self.writeDoneCount || self.error)) {
                 self.fflushCbs.shift().cb(self.error);
             }
+            if (self.writeDoneCount === self.writePendingCount) self.writeDoneCount = self.writePendingCount = 0;
             if (self.writestring) writechunk(); // keep writing if more data arrived
             else self.writing = false;
         })

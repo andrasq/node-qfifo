@@ -541,7 +541,7 @@ module.exports = {
                     t.equal(lines.length, 100000);
                     t.done();
                     // 32k and larger buf about 2.5m lines/sec
-                    // 5600x 4.9g: 3.7m/s, 26ms
+                    // 5600x 4.9g: 3.7m/s, 26ms (22ms w/o Buffer.byteLength)
                 })
             })
         },
