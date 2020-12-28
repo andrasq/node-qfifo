@@ -95,7 +95,7 @@ QFifo.prototype.write = function write( str ) {
     this.writeSentCount += str.length;
     this.writestring += str;
     var self = this;
-    if (this.writestring.length > this.writeSize) this._writesome();
+    if (this.writestring.length >= this.writeSize) this._writesome();
     else if (!this.queuedWrite) this.queuedWrite =
         setTimeout(function() { self.queuedWrite = null; self._writesome() }, this.writeDelay);
 }
@@ -149,26 +149,21 @@ QFifo.prototype._readsome = function _readsome( ) {
 }
 
 QFifo.prototype._writesome = function _writesome( ) {
-    if (!this.writing) {
-        var self = this;
-        self.writing = true;
-        this.open(function(err) {
-            if (self.error) { self.writing = false; return }
-            (function writeit() {
-                var nchars = self.writestring.length;
-                var buf = fromBuf(self.writestring); // one-shot write is faster than chunking
-                self.writestring = '';
-                // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
-                fs.write(self.fd, buf, 0, buf.length, null, function(err, nbytes) {
-                    if (err) self.error = err; // and continue, to error out all the pending callbacks
-                    self.writeDoneCount += nchars;
-                    while (self.fflushCbs.length && (self.fflushCbs[0].count <= self.writeDoneCount || self.error)) {
-                        self.fflushCbs.shift().cb(self.error);
-                    }
-                    if (self.writestring) writeit(); // keep writing if more data arrived
-                    else self.writing = false;
-                })
-            })();
+    var self = this;
+    this.writing ? 'arlready writing, only one at a time' : (this.writing = true, this.open(writechunk));
+    function writechunk() {
+        if (self.error) { self.writing = false; return }
+        var nchars = self.writestring.length, writebuf = fromBuf(self.writestring);
+        self.writestring = '';
+        // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
+        fs.write(self.fd, writebuf, 0, writebuf.length, null, function(err, nbytes) {
+            if (err) self.error = err; // and continue, to error out all the pending callbacks
+            self.writeDoneCount += nchars;
+            while (self.fflushCbs.length && (self.fflushCbs[0].count <= self.writeDoneCount || self.error)) {
+                self.fflushCbs.shift().cb(self.error);
+            }
+            if (self.writestring) writechunk(); // keep writing if more data arrived
+            else self.writing = false;
         })
     }
 }
