@@ -157,7 +157,7 @@ QFifo.prototype._writesome = function _writesome( ) {
         self.writestring = '';
         // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
         fs.write(self.fd, writebuf, 0, writebuf.length, null, function(err, nbytes) {
-            if (err) self.error = err; // and continue, to error out all the pending callbacks
+            if (err) self.error = err; // and continue, to error out the pending callbacks
             self.writeDoneCount += nchars;
             while (self.fflushCbs.length && (self.fflushCbs[0].count <= self.writeDoneCount || self.error)) {
                 self.fflushCbs.shift().cb(self.error);

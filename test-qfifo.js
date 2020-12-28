@@ -525,7 +525,7 @@ module.exports = {
                 console.timeEnd('AR: write 200B x100k');
                 // about 3.2m lines / sec, 31ms if single 20mb burst
                 // 4.6m/s, 21ms if yielding the cpu after every 100 lines
-                // 5600x 4.9g: 6.0m/s, 16ms yielding every 200
+                // 5600x 4.9g: 6.0m/s, 16ms yielding every 200; 9.0m/s, 11ms every 50
 
                 t.ifError(err);
                 t.ifError(fifo.error);
@@ -551,6 +551,8 @@ module.exports = {
 function readall( fifo, lines, cb ) {
     var line;
     (function loop() {
+// FIXME: for loop breaks tests
+        //for (var i=0; i<500; i++) (line = fifo.getline()) && lines.push(line);
         while ((line = fifo.getline())) lines.push(line);
         if (fifo.error) cb(fifo.error, lines);
         if (fifo.eof) cb(null, lines);
@@ -563,7 +565,7 @@ function writeall( fifo, lines, cb ) {
     (function loop() {
         // TODO: writing 200 200B lines with a 16k write buffer runs at 5m lines / sec
         // TODO: Try to capture this in the writeSize chunking logic
-        for (var j=0; j<200; j++) if (i < lines.length) fifo.putline(lines[i++]);
+        for (var j=0; j<50; j++) if (i < lines.length) fifo.putline(lines[i++]);
         if (i >= lines.length) return fifo.fflush(cb);
         setImmediate(loop);
     })();
