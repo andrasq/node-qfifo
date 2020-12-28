@@ -16,6 +16,7 @@ module.exports = QFifo;
 
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
+var CH_NL = '\n'.charCodeAt(0);
 
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
@@ -86,8 +87,8 @@ QFifo.prototype.putline = function putline( str ) {
     // faster to append a newline here than to write a newline separately,
     // even though both are just concatenated to this.writestring.
     // TODO: allow for Buffers without converting first (to stream incoming data to fifo)
-    if (Buffer.isBuffer(str)) str = str.toString();
-    str[str.length - 1] === '\n' ? this.write(str) : this.write(str + '\n');
+    if (typeof str !== 'string') str = Buffer.isBuffer(str) ? str.toString(): String(str);
+    str.charCodeAt(str.length - 1) === CH_NL ? this.write(str) : this.write(str + '\n');
 }
 
 QFifo.prototype.write = function write( str ) {
