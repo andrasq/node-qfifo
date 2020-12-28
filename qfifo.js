@@ -111,7 +111,7 @@ QFifo.prototype.fflush = function fflush( callback ) {
 // checkpoint the read header
 QFifo.prototype.rsync = function rsync( callback ) {
     var header = { position: this.position };
-    try { writeFileSync(this.headername, JSON.stringify(header)); callback() } catch (e) { callback(e) }
+    try { writeHeaderSync(this.headername, JSON.stringify(header)); callback() } catch (e) { callback(e) }
 }
 
 // tracking readstringoffset idea borrowed from qfgets
@@ -171,17 +171,12 @@ QFifo.prototype._writesome = function _writesome( ) {
 
 QFifo.prototype = toStruct(QFifo.prototype);
 
-/**
-function eoln( buf, pos ) {
-    for (var i=pos; i<buf.length; i++) if (buf[i] === 10) return i;
-    return -1;
-}
-**/
-
 // 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+'
-function writeFileSync( filename, contents ) {
+function writeHeaderSync( filename, contents ) {
     try { var fd = fs.openSync(filename, 'r+') } catch (e) { var fd = fs.openSync(filename, 'w') }
-    var buf = fromBuf(contents);
+    var buf = allocBuf(200);
+    var i = buf.write(contents);
+    for ( ; i<buf.length; i++) buf[i] = 0x20;
     return fs.writeSync(fd, buf, 0, buf.length, null);
 }
 
