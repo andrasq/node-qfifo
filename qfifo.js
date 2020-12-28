@@ -115,21 +115,18 @@ QFifo.prototype.rsync = function rsync( callback ) {
 
 // tracking readstringoffset idea borrowed from qfgets
 QFifo.prototype.getline = function getline( ) {
-    var ix = this.readstring.indexOf('\n', this.readstringoffset);
-    if (ix < 0) {
+    var eol = this.readstring.indexOf('\n', this.readstringoffset);
+    if (eol >= 0) {
+        var line = this.readstring.slice(this.readstringoffset, eol + 1);
+        this.readstringoffset = eol + 1;
+        this.position += Buffer.byteLength(line);
+        return line;
+    } else {
         // TODO: reading multi-chunk lines is inefficient, even the indexOf() is O(n^2)
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
         this.readstringoffset = 0;
         this._readsome();
         return '';
-    } else {
-        var line = this.readstring.slice(this.readstringoffset, ix + 1);
-        this.readstringoffset = ix + 1;
-        if (ix > 2 * this.readSize) { this.readstring = this.readstring.slice(ix + 1); this.readstringoffset = 0 }
-        // TODO: maybe find eoln() newlines in the buffer, remember line offets
-        this.position += Buffer.byteLength(line);
-        if (this.readstring.length - this.readstringoffset < this.readSize / 2) this._readsome();
-        return line;
     }
 }
 
