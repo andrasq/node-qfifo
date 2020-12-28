@@ -23,7 +23,7 @@ efficiently feed the ingest process that consumes it.
 
 - QFifos are inherently single-reader, the consuming process owns the fifo.
 - Single-writer; concurrent writes are not supported. (File locking is missing from nodejs, so
-  this incarnation differs from quicklib Quick_Fifo_File that it was based on.)
+  this incarnation differs from the quicklib version it was based on.)
 
 
 Api
@@ -107,7 +107,8 @@ Read or write error that was encountered.  Either stops the fifo.
 
 ### fifo.eof
 
-Set when zero bytes are read from the file, cleared otherwise.
+Set when zero bytes are read from the file, cleared otherwise.  If the fifo is appended, a
+future `getline` will read the data and clear the eof flag.
 
 
 See Also
