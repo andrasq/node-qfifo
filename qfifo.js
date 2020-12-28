@@ -126,32 +126,27 @@ QFifo.prototype.getline = function getline( ) {
         var line = this.readstring.slice(this.readstringoffset, ix + 1);
         this.readstringoffset = ix + 1;
         if (ix > 2 * this.readSize) { this.readstring = this.readstring.slice(ix + 1); this.readstringoffset = 0 }
-        // TODO: maybe find eoln() newlines in the buffer, remember line offets (maybe qbuffer?)
-        this.position += Buffer.byteLength(line); // track the read offset, then read ahead
+        // TODO: maybe find eoln() newlines in the buffer, remember line offets
+        this.position += Buffer.byteLength(line);
         if (this.readstring.length - this.readstringoffset < this.readSize / 2) this._readsome();
         return line;
     }
 }
 
 QFifo.prototype._readsome = function _readsome( ) {
-    if (!this.reading) {
-        var self = this;
-        self.reading = true;
-        this.open(function(err) {
-            if (self.error) { self.reading = false; return }
-            (function readit() {
-                fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
-                    if (err) { self.error = err; self.eof = true; return }
-                    self.eof = (nbytes === 0);
-                    self.seekposition += nbytes;
-                    if (nbytes > 0) {
-                        self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
-                    }
-                    // if the read pipeline is draining low, kick off another read to refill it
-                    if (!self.eof && self.readstring.length < self.readSize / 2) readit();
-                    else self.reading = false;
-                })
-            })();
+    var self = this;
+    this.reading ? 'already reading, only one at a time' : (this.reading = true, this.open(readchunk));
+    function readchunk() {
+        if (self.error) { self.reading = false; return }
+        fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekposition, function(err, nbytes) {
+            self.reading = false;
+            if (err) { self.error = err; self.eof = true; return }
+            self.eof = (nbytes === 0);
+            self.seekposition += nbytes;
+            var wasEmpty = !self.readstring;
+            self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
+            // if first read into empty buffer, read ahead next chunk
+            if (wasEmpty && nbytes) { self.reading = true; readchunk() }
         })
     }
 }
