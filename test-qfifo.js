@@ -267,7 +267,26 @@ module.exports = {
                     while ((line = rfifo.getline())) lines.push(line);
                     t.deepEqual(lines, ['line-1\n', 'line-2\n', 'line-3\n', 'line-4\n']);
                     t.done();
-                }, 50);
+                }, 5);
+            })
+        },
+
+        'able to write non-strings': function(t) {
+            var fifo = this.wfifo;
+            fifo.putline('line1\n');
+            fifo.putline(fromBuf('line2\n'));
+            fifo.putline(123);
+            fifo.putline({});
+            fifo.putline(null);
+            fifo.fflush(function(err) {
+                t.ifError(err);
+                fifo.getline();
+                setTimeout(function() {
+                    var line, lines = [];
+                    while ((line = fifo.getline())) lines.push(line);
+                    t.deepEqual(lines, ['line1\n', 'line2\n', '123\n', '[object Object]\n', 'null\n']);
+                    t.done();
+                }, 5)
             })
         },
 
