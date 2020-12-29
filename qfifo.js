@@ -21,11 +21,11 @@ var CH_NL = '\n'.charCodeAt(0);
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
     this.options = {
-        flag:           getOption('flag', 'string', 'r'),
-        readSize:       getOption('readSize', 'number', 64 * 1024),
-        writeSize:      getOption('writeSize', 'number', 16 * 1024),
-        writeDelay:     getOption('writeDelay', 'number', 2),
-        updatePosition: getOption('updatePosition', 'boolean', true),
+        flag:           getOption(options, 'flag', 'string', 'r'),
+        readSize:       getOption(options, 'readSize', 'number', 64 * 1024),
+        writeSize:      getOption(options, 'writeSize', 'number', 16 * 1024),
+        writeDelay:     getOption(options, 'writeDelay', 'number', 2),
+        updatePosition: getOption(options, 'updatePosition', 'boolean', true),
     };
     if (!filename) throw new Error('missing filename');
     var flag = this.options.flag;
@@ -55,12 +55,10 @@ function QFifo( filename, options ) {
     this.fflushCbs = new Array();
     this.openCbs = new Array();
     this.queuedWrite = null;
-
-    function getOption(name, type, _default) {
-        if (options[name] === undefined) return _default;
-        if (typeof options[name] !== type) throw new Error(name + ': must be a ' + type);
-        return options[name];
-    }
+}
+function getOption(opts, name, type, _default) {
+    return typeof opts[name] === type ? opts[name] : opts[name] === undefined ? _default : throwError();
+    function throwError() { throw new Error(name + ': must be ' + type) }
 }
 
 QFifo.prototype.open = function open( callback ) {
