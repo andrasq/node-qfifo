@@ -417,6 +417,27 @@ module.exports = {
                 t.done();
             })
         },
+
+        'does not update position if updatePosition:false': function(t) {
+            var fifo = new QFifo(this.tempfile, { flag: 'a+', updatePosition: false });
+            t.equal(fifo.position, 0);
+            fifo.write('line1\nline22\nline333\n');
+            fifo.fflush(function(err) {
+                t.ifError(err);
+                fifo.getline();
+                setTimeout(function() {
+                    t.equal(fifo.getline(), 'line1\n');
+                    t.equal(fifo.position, 0);
+                    t.equal(fifo.getline(), 'line22\n');
+                    t.equal(fifo.position, 0);
+                    t.equal(fifo.getline(), 'line333\n');
+                    t.equal(fifo.position, 0);
+                    t.equal(fifo.getline(), '');
+                    t.equal(fifo.position, 0);
+                    t.done();
+                }, 5)
+            })
+        },
     },
 
     'helpers': {

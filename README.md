@@ -42,6 +42,9 @@ Options may contain the following settings:
 - `readSize`: how many bytes to read at a time, default 64K.
 - `writeSize`: TBD
 - `writeDelay`: TBD
+- `updatePosition`: whether to update `fifo.position` with the byte offset in the file of the
+  next line to be read.  Default `true`.  `position` is needed to checkpoint the read state, but
+  omitting it is 25% faster.
 
 ### fifo.open( callback(err, fd) )
 
@@ -129,6 +132,7 @@ Todo
 Changelog
 ----------------
 
+- 0.3.0 - `updatePosition` option to avoid the byteLength position tracking
 - 0.2.2 - allow writing Buffers, space-pad header files
 - 0.2.1 - constructor `options`, pass-through `options.flag`, auto-open on fifo read/write, faster rsync
 - 0.1.0 - first version

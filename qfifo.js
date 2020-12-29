@@ -20,13 +20,14 @@ var CH_NL = '\n'.charCodeAt(0);
 
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
-    var optionTypes = { flag: 'string', readSize: 'number', writeSize: 'number', writeDelay: 'number' };
+    var optionTypes = { flag: 'string', readSize: 'number', writeSize: 'number', writeDelay: 'number',
+                        updatePosition: 'boolean' };
     for (var k in optionTypes) {
         var value = options[k];
         if (value !== undefined && typeof value !== optionTypes[k]) throw new Error(k + ': must be a ' + optionTypes[k]);
     }
     if (!filename) throw new Error('missing filename');
-    var flag = options.flag || 'r';
+    var flag = getOption('flag', 'r');
     if (flag[0] !== 'r' && flag[0] !== 'a') throw new Error(flag + ": bad open mode, expected 'r' or 'a'");
 
     this.filename = filename;
@@ -37,10 +38,11 @@ function QFifo( filename, options ) {
     this.eof = false;           // no data from last read
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
+    this.updatePosition = getOption('updatePosition', true);
 
     // TODO: move this into Reader()
     this.reading = false;
-    this.readSize = options.readSize || 64 * 1024;
+    this.readSize = getOption('readSize', 64 * 1024);
     this.readbuf = allocBuf(this.readSize);
     this.decoder = new sd.StringDecoder();
     this.seekoffset = this.position;
@@ -49,14 +51,16 @@ function QFifo( filename, options ) {
 
     // TODO: move this into Writer()
     this.writing = false;
-    this.writeSize = options.writeSize || 16 * 1024;
-    this.writeDelay = options.writeDelay || 2;
+    this.writeSize = getOption('writeSize', 16 * 1024);
+    this.writeDelay = getOption('writeDelay', 2);
     this.writestring = '';
     this.writePendingCount = 0;
     this.writeDoneCount = 0;
     this.fflushCbs = new Array();
     this.openCbs = new Array();
     this.queuedWrite = null;
+
+    function getOption(name, _default) { return options[name] === undefined ? _default : options[name] }
 }
 
 QFifo.prototype.open = function open( callback ) {
@@ -119,7 +123,7 @@ QFifo.prototype.getline = function getline( ) {
     var eol = this.readstring.indexOf('\n', this.readstringoffset);
     if (eol >= 0) {
         var line = this.readstring.slice(this.readstringoffset, this.readstringoffset = eol + 1);
-        this.position += Buffer.byteLength(line);
+        if (this.updatePosition) this.position += Buffer.byteLength(line);
         return line;
     } else {
         // TODO: reading multi-chunk lines is inefficient, even the indexOf() is O(n^2)
@@ -175,8 +179,8 @@ QFifo.prototype = toStruct(QFifo.prototype);
 function writeHeaderSync( filename, contents ) {
     try { var fd = fs.openSync(filename, 'r+') } catch (e) { var fd = fs.openSync(filename, 'w') }
     var buf = allocBuf(200);
-    var i = buf.write(contents);
-    for ( ; i<buf.length; i++) buf[i] = 0x20;
+    var n = buf.write(contents);
+    for ( ; n < buf.length; n++) buf[n] = 0x20;
     return fs.writeSync(fd, buf, 0, buf.length, null);
 }
 
