@@ -440,6 +440,35 @@ module.exports = {
         },
     },
 
+    'readlines': {
+        'reads file in chunks': function(t) {
+            var fifo = new QFifo(__filename, { readSize: 20 });
+            var lines = '';
+            fifo.readlines(function(line) { lines += line + '\n' });
+            setTimeout(function() {
+                t.ok(fifo.eof);
+                t.equal(lines, fs.readFileSync(__filename).toString());
+                t.done();
+            }, 20);
+        },
+
+        'can pause/resume': function(t) {
+            var fifo = new QFifo('package.json');
+            var lineTimes = [];
+            fifo.readlines(function(line) {
+                lineTimes.push(Date.now());
+                fifo.pause();
+                setTimeout(function() { fifo.resume() }, 2);
+                if (fifo.eof) {
+                    var contents = fs.readFileSync('package.json').toString();
+                    t.equal(lineTimes.length, contents.split('\n').length - 1);
+                    for (var i=1; i<lineTimes.length; i++) t.ok(lineTimes[i] > lineTimes[i-1]);
+                    t.done();
+                }
+            })
+        },
+    },
+
     'helpers': {
         '_readsome': {
             'sets the `fifo.reading` flag as a mutex': function(t) {
@@ -449,18 +478,18 @@ module.exports = {
                 t.equal(fifo.reading, true);
                 setTimeout(function() {
                     t.equal(fifo.reading, false);
-                    t.equal(fifo.eof, true);
+                    t.equal(fifo._eof, true);
                     t.done();
                 }, 5);
             },
-            'sets eof if zero bytes read': function(t) {
+            'sets _eof if zero bytes read': function(t) {
                 var fifo = this.rfifo;
-                fifo.eof = false;
+                fifo._eof = false;
                 var spy = t.stubOnce(fs, 'read').yields(null, 0);
                 fifo._readsome();
                 setTimeout(function() {
                     t.ok(spy.called);
-                    t.equal(fifo.eof, true);
+                    t.equal(fifo._eof, true);
                     t.done();
                 }, 5);
             },
@@ -570,10 +599,10 @@ module.exports = {
                 t.ifError(err);
                 t.ifError(fifo.error);
                 fifo.close();
-                fifo = new QFifo(tempfile, 'r');
+                fifo = new QFifo(tempfile, { flag: 'r', updatePosition: true });
 
                 console.time('AR: read 200B x100k');
-                readall(fifo, new Array(), function(err, lines) {
+                readall(fifo, null, function(err, lines) {
                     console.timeEnd('AR: read 200B x100k');
 
                     t.ifError(err);
@@ -581,7 +610,27 @@ module.exports = {
                     t.equal(lines.length, 100000);
                     t.done();
                     // 32k and larger buf about 2.5m lines/sec
-                    // 5600x 4.9g: 3.7m/s, 26ms (22ms w/o Buffer.byteLength)
+                    // 5600x 4.9g: 5.9m/s, 16.5ms (8.5m/s 12ms w/o updatePosition)
+                })
+            })
+        },
+
+        'readlines 100k 200B lines': function(t) {
+            var line = new Array(200).join('x') + '\n';
+            var fifo = new QFifo(this.tempfile, { flag: 'a+', updatePosition: true });
+            var lines  = new Array(100000); for (var i=0; i<lines.length; i++) lines[i] = line;
+            writeall(fifo, lines, function(err) {
+                t.ifError(err);
+                var nlines = 0;
+                console.time("AR: readlines 200B x100k");
+                fifo.readlines(function(line) {
+                    nlines += 1;
+                    if (fifo.eof) {
+                        console.timeEnd("AR: readlines 200B x100k");
+                        // about 6.5m/s 200b lines (9.0/s w/o updatePosition)
+                        t.equal(nlines, 100000);
+                        t.done();
+                    }
                 })
             })
         },
@@ -589,9 +638,10 @@ module.exports = {
 };
 
 function readall( fifo, lines, cb ) {
+    // much faster to not gather lines into an array
+    lines = lines || { length: 0, push: function() { this.length += 1 } };
     var line;
     (function loop() {
-// FIXME: for loop breaks tests
         //for (var i=0; i<500; i++) (line = fifo.getline()) && lines.push(line);
         while ((line = fifo.getline())) lines.push(line);
         if (fifo.error) cb(fifo.error, lines);

@@ -14,6 +14,7 @@ var sd = require('string_decoder');
 
 module.exports = QFifo;
 
+var setImmediate = eval('global.setImmediate || process.nextTick');
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 var CH_NL = '\n'.charCodeAt(0);
@@ -35,20 +36,23 @@ function QFifo( filename, options ) {
     this.headername = filename + '.hd';
     this.fd = -1;
 
-    this.eof = false;           // no data from last read
+    this.eof = false;           // no more lines until more written
     this.error = null;          // read error, bad file
     this.position = 0;          // byte offset of next line to be read
 
     // TODO: move this into Reader()
-    this.reading = false;
+    this._eof = false;          // short read, file eof
+    this.reading = false;       // already reading mutex
     this.readbuf = allocBuf(this.options.readSize);
     this.decoder = new sd.StringDecoder();
     this.seekoffset = this.position;
     this.readstring = '';
     this.readstringoffset = 0;
+    this.readlinesPaused = false;
+    this.readlinesLoop = function(){};
 
     // TODO: move this into Writer()
-    this.writing = false;
+    this.writing = false;       // already writing mutex
     this.writestring = '';
     this.writePendingCount = 0;
     this.writeDoneCount = 0;
@@ -68,17 +72,17 @@ QFifo.prototype.open = function open( callback ) {
     if (this.fd === -1) this.fd = -2; else return; // mutex the openers
     fs.open(this.filename, this.options.flag, function(err, fd) {
         self.fd = err ? -1 : fd;
-        if (err) { self.error = err; self.eof = true; _runCallbacks(self.openCbs, err, self.fd); return }
+        if (err) { self.error = err; self.eof = self._eof = true; self._runCallbacks(self.openCbs, err, self.fd); return }
         fs.readFile(self.headername, function(err2, header) {
             try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
             self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : 0;
-            self.eof = false;
+            self.eof = self._eof = false;
             self.error = null;
-            _runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
+            self._runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
         })
     })
-    function _runCallbacks(cbs, err, ret) { while (cbs.length) cbs.shift()(err, ret) }
 }
+QFifo.prototype._runCallbacks = function _runCallbacks( cbs, err, ret ) { while (cbs.length) cbs.shift()(err, ret); }
 
 QFifo.prototype.close = function close( ) {
     if (this.fd >= 0) try { fs.closeSync(this.fd) } catch (e) { console.error(e) }
@@ -122,14 +126,26 @@ QFifo.prototype.getline = function getline( ) {
     if (eol >= 0) {
         var line = this.readstring.slice(this.readstringoffset, this.readstringoffset = eol + 1);
         if (this.options.updatePosition) this.position += Buffer.byteLength(line);
+        if (this.readstringoffset >= this.readstring.length) this.eof = this._eof;
         return line;
     } else {
         // TODO: reading multi-chunk lines is inefficient, even the indexOf() is O(n^2)
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
         this.readstringoffset = 0;
         this._readsome();
+        this.eof = this._eof;
         return '';
     }
+}
+
+QFifo.prototype.pause = function pause( ) { this.readlinesPaused = true }
+QFifo.prototype.resume = function resume( ) { this.readlinesPaused = false; this.readlinesLoop() }
+QFifo.prototype.readlines = function readlines( visitor ) {
+    var self = this, line;
+    (function loop() {
+        while (!self.readlinesPaused && (line = self.getline())) visitor(line.slice(0, -1));
+        if (!self.eof || self.readlinesPaused) { self.readlinesLoop = loop; setImmediate(function() { self._readsome() }) }
+    })();
 }
 
 QFifo.prototype._readsome = function _readsome( ) {
@@ -139,13 +155,18 @@ QFifo.prototype._readsome = function _readsome( ) {
         if (self.error) { self.reading = false; return }
         fs.read(self.fd, self.readbuf, 0, self.readbuf.length, self.seekoffset, function(err, nbytes) {
             self.reading = false;
-            if (err) { self.error = err; self.eof = true; return }
-            self.eof = (nbytes === 0);
             self.seekoffset += nbytes;
+            if (err) { self.error = err; self.eof = self._eof = true; return }
+            self._eof = (!(nbytes === self.readbuf.length));
             var wasEmpty = !self.readstring;
             self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
             // if first read into empty buffer, read ahead next chunk
             if (wasEmpty && nbytes) { self.reading = true; readchunk() }
+            // if readlines is active, deliver the lines from this chunk
+            // FIXME: if looping before readahead, next-to-last read will get nbytes=1000 from offset 25000 instead of 720
+            // thus duplicated lines and no eof.  The read after that gets the 720 and stops.
+            // Does not depend on node version, node-v0.10.42 behaves the same way, setImmediate(loop) same.
+            if (nbytes > 0) self.readlinesLoop();
         })
     }
 }

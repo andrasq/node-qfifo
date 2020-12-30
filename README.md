@@ -132,7 +132,7 @@ Todo
 Changelog
 ----------------
 
-- 0.3.0 - `updatePosition` option to avoid the byteLength position tracking
+- 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading
 - 0.2.2 - allow writing Buffers, space-pad header files
 - 0.2.1 - constructor `options`, pass-through `options.flag`, auto-open on fifo read/write, faster rsync
 - 0.1.0 - first version
