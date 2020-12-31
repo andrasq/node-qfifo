@@ -479,6 +479,24 @@ module.exports = {
                 }
             })
         },
+
+/***
+        // NOTE: readlines stops once no more lines, it does not watch the fifo
+        'delivers new lines as they appear': function(t) {
+            var fifo = new QFifo(this.tempfile, 'a+');
+            fifo.putline('line1');
+            fifo.putline('line22');
+            var lines = [];
+            fifo.readlines(function(line) {
+                lines.push(line);
+                if (lines.length === 3) {
+                    t.equal(lines[2], 'line333\n');
+                    t.done();
+                }
+            })
+            setTimeout(function() { fifo.putline('line333') }, 10);
+        },
+**/
     },
 
     'helpers': {

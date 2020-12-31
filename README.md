@@ -100,18 +100,34 @@ Checkpoint the byte offset of the next unread line from `fifo.position` so if th
 reopened it can resume reading where it left off.  The information is saved in JSON form to a
 separate file named the same as the fifo `filename` but with `'.hd'` appended.
 
+### fifo.readlines( visitor(line) )
+
+Loop getline() and call `visitor` with each line in the fifo.  `fifo.eof` will be set once the
+fifo is empty and has no more lines.  If the fifo is appended, `eof` is cleared but the
+readlines loop is not restarted.  Note that `readlines` and `getline` return lines that include
+the terminating newline, which differens from node `readline` that strips them.
+
+### fifo.pause( )
+
+Suspend the `readlines` loop, do not deliver any more lines until resumed.
+
+### fifo.resume( )
+
+Resume the `readlines` loop, start delivering lines again.
+
 ### fifo.position
 
 Byte offset of the next unseen line in the input file.
 
 ### fifo.error
 
-Read or write error that was encountered.  Either stops the fifo.
+Read or write error that was encountered.  Either stops the fifo.  Errors also set `fifo.eof` so
+loops that check just `eof` still terminate once no more data is forthcoming.
 
 ### fifo.eof
 
-Set when zero bytes are read from the file, cleared otherwise.  If the fifo is appended, a
-future `getline` will read the data and clear the eof flag.
+Set when the fifo contains no more lines, ie when the end of the file has been reached and no
+more lines are left in the buffer.  Appending more lines to the fifo clears the `eof` flag.
 
 
 See Also
