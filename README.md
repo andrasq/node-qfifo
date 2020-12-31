@@ -10,6 +10,7 @@ efficiently feed the ingest process that consumes it.
 ## Highlights
 
 - Simple `open` / `getline` / `putline` / `close` semantics.
+- Node `readline` emulation.
 - Synchronous calls, asynchronous file i/o.
 - Efficient batched file reads and writes.
 - Very high throughput, hundreds of megabytes of data per second.
@@ -31,11 +32,12 @@ Api
 
 ### fifo = new QFifo( filename, options )
 
-Create a fifo for reading or appending the named file.  Mode must be `'r'` or `'a'` to control
-whether the file will be created if missing: `a` append mode can create the file, `r` read mode
-requires the file to already exist.  All fifos can both read and write.  Creating a new QFifo is
-a fast, it only allocates the object; the fifo must still be `open`-ed before use.  Note that
-`putline` and `getline` automatically open the fifo.
+Create a fifo for reading or appending the named file.  Mode should be `'r+'` or `'a+'` to
+control whether the file will be treated if missing: `r+` read mode to error out if the file
+does not already exist, `a+` append mode to create the file if missing.  All fifos can both read
+and write; for read-only or append-only access, omit the `+` from the flag.  Creating a new
+QFifo is a fast, it only allocates the object; the fifo must still be `open`-ed (but note
+that `getline`, `putline` and `readlines` automatically open the fifo).
 
 Options may contain the following settings:
 - `flag`: open mode flag for `fs.open()`, default `'r'`.
@@ -57,23 +59,6 @@ It is safe to open the fifo more than once, the duplicate calls are harmless.  N
 
 Close the file descriptor.  The fifo will not be usable until it is reopened.  Closing the fifo
 while still writing will produce a write error; sync first with `flush()`.
-
-### fifo.putline( line )
-
-Append a line of text to the file.  All lines must be newline terminated; putline will supply
-the newline if it is missing.  Putline is a non-blocking call that buffers the data and returns
-immediately.  Writing is is done in batches asychronously in the background.  The application
-must periodically yield the cpu for the writes to happen.  Any write errors are saved in
-`fifo.error` and no further writes will be performed.
-
-### fifo.write( string )
-
-Internal fifo append method that does not mandate newlines.  Use with caution.
-
-### fifo.flush( callback )
-
-Invoke callback() once the currently buffered writes have completed.  New writes made after the
-flush call are not waited for (but may still have been included in the batch).
 
 ### line = fifo.getline( )
 
@@ -100,12 +85,32 @@ Checkpoint the byte offset of the next unread line from `fifo.position` so if th
 reopened it can resume reading where it left off.  The information is saved in JSON form to a
 separate file named the same as the fifo `filename` but with `'.hd'` appended.
 
+### fifo.putline( line )
+
+Append a line of text to the file.  All lines must be newline terminated; putline will supply
+the newline if it is missing.  Putline is a non-blocking call that buffers the data and returns
+immediately.  Writing is is done in batches asychronously in the background.  The application
+must periodically yield the cpu for the writes to happen.  Any write errors are saved in
+`fifo.error` and no further writes will be performed.
+
+### fifo.write( string )
+
+Internal fifo append method that does not mandate newlines.  Use with caution.
+
+### fifo.flush( callback )
+
+Invoke callback() once the currently buffered writes have completed.  New writes made after the
+flush call are not waited for (but may still have been included in the batch).
+
 ### fifo.readlines( visitor(line) )
 
 Loop getline() and call `visitor` with each line in the fifo.  `fifo.eof` will be set once the
 fifo is empty and has no more lines.  If the fifo is appended, `eof` is cleared but the
 readlines loop is not restarted.  Note that `readlines` and `getline` return lines that include
 the terminating newline, which differs from node `readline` that strips them.
+
+NOTE: This call is not reentrant, only a single function may be reading the fifo at a time.
+Calling readlines() with a new `visitor` displaces the first function.
 
     fifo.readlines(function(line)) {
         // if (fifo.eof) then no more lines
@@ -130,8 +135,9 @@ loops that check just `eof` still terminate once no more data is forthcoming.
 
 ### fifo.eof
 
-Set when the fifo contains no more lines, ie when the end of the file has been reached and no
-more lines are left in the buffer.  Appending more lines to the fifo clears the `eof` flag.
+Flag set when the fifo contains no more lines, ie when the end of the file has been reached and
+no more lines are left in the buffer.  Appending lines to the fifo and retrying the read clears
+the `eof` flag.
 
 
 See Also
@@ -152,7 +158,8 @@ Todo
 Changelog
 ----------------
 
-- 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading
+- 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`
+          only when no more lines available
 - 0.2.2 - allow writing Buffers, space-pad header files
 - 0.2.1 - constructor `options`, pass-through `options.flag`, auto-open on fifo read/write, faster rsync
 - 0.1.0 - first version
