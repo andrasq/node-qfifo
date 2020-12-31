@@ -447,12 +447,12 @@ module.exports = {
             fifo.readlines(function(line) {
                 t.ok(line[line.length - 1] === '\n');
                 lines += line;
+                if (fifo.eof) {
+                    t.equal(lines, fs.readFileSync(__filename).toString());
+                    t.ok(fifo.eof);
+                    t.done();
+                }
             });
-            setTimeout(function() {
-                t.ok(fifo.eof);
-                t.equal(lines, fs.readFileSync(__filename).toString());
-                t.done();
-            }, 40);
         },
 
         'does not deliver lines until resumed': function(t) {
