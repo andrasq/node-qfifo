@@ -444,12 +444,15 @@ module.exports = {
         'reads file in chunks': function(t) {
             var fifo = new QFifo(__filename, { readSize: 20 });
             var lines = '';
-            fifo.readlines(function(line) { lines += line });
+            fifo.readlines(function(line) {
+                t.ok(line[line.length - 1] === '\n');
+                lines += line;
+            });
             setTimeout(function() {
                 t.ok(fifo.eof);
                 t.equal(lines, fs.readFileSync(__filename).toString());
                 t.done();
-            }, 20);
+            }, 40);
         },
 
         'does not deliver lines until resumed': function(t) {
