@@ -444,12 +444,24 @@ module.exports = {
         'reads file in chunks': function(t) {
             var fifo = new QFifo(__filename, { readSize: 20 });
             var lines = '';
-            fifo.readlines(function(line) { lines += line + '\n' });
+            fifo.readlines(function(line) { lines += line });
             setTimeout(function() {
                 t.ok(fifo.eof);
                 t.equal(lines, fs.readFileSync(__filename).toString());
                 t.done();
             }, 20);
+        },
+
+        'does not deliver lines until resumed': function(t) {
+            var fifo = new QFifo(__filename);
+            var now = Date.now();
+            fifo.pause();
+            fifo.readlines(function(line) {
+                t.ok(Date.now() >= now + 20 - 1);
+                fifo.pause();
+                t.done();
+            })
+            setTimeout(function() { fifo.resume() }, 20);
         },
 
         'can pause/resume': function(t) {
@@ -627,7 +639,7 @@ module.exports = {
                     nlines += 1;
                     if (fifo.eof) {
                         console.timeEnd("AR: readlines 200B x100k");
-                        // about 6.5m/s 200b lines (9.0/s w/o updatePosition)
+                        // about 6.7m/s 200b lines (9.8/s w/o updatePosition)
                         t.equal(nlines, 100000);
                         t.done();
                     }

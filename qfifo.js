@@ -143,7 +143,7 @@ QFifo.prototype.resume = function resume( ) { this.readlinesPaused = false; this
 QFifo.prototype.readlines = function readlines( visitor ) {
     var self = this, line;
     (function loop() {
-        while (!self.readlinesPaused && (line = self.getline())) visitor(line.slice(0, -1));
+        while (!self.readlinesPaused && (line = self.getline())) visitor(line);
         if (!self.eof || self.readlinesPaused) { self.readlinesLoop = loop; setImmediate(function() { self._readsome() }) }
     })();
 }
