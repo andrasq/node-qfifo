@@ -105,7 +105,7 @@ separate file named the same as the fifo `filename` but with `'.hd'` appended.
 Loop getline() and call `visitor` with each line in the fifo.  `fifo.eof` will be set once the
 fifo is empty and has no more lines.  If the fifo is appended, `eof` is cleared but the
 readlines loop is not restarted.  Note that `readlines` and `getline` return lines that include
-the terminating newline, which differxs from node `readline` that strips them.
+the terminating newline, which differs from node `readline` that strips them.
 
     fifo.readlines(function(line)) {
         // if (fifo.eof) then no more lines
