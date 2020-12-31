@@ -56,7 +56,7 @@ function QFifo( filename, options ) {
     this.writestring = '';
     this.writePendingCount = 0;
     this.writeDoneCount = 0;
-    this.fflushCbs = new Array();
+    this.flushCbs = new Array();
     this.openCbs = new Array();
     this.queuedWrite = null;
 }
@@ -108,10 +108,10 @@ QFifo.prototype.write = function write( str ) {
 }
 
 // push the written data to the file
-QFifo.prototype.fflush = function fflush( callback ) {
+QFifo.prototype.flush = function flush( callback ) {
     if (this.error) callback(this.error);
     else if (this.writeDoneCount >= this.writePendingCount) callback();
-    else this.fflushCbs.push({ awaitCount: this.writePendingCount, cb: callback });
+    else this.flushCbs.push({ awaitCount: this.writePendingCount, cb: callback });
 }
 
 // checkpoint the read header
@@ -182,8 +182,8 @@ QFifo.prototype._writesome = function _writesome( ) {
         fs.write(self.fd, writebuf, 0, writebuf.length, null, function(err, nbytes) {
             if (err) self.error = err; // and continue, to error out the pending callbacks
             self.writeDoneCount += nchars;
-            while (self.fflushCbs.length && (self.fflushCbs[0].awaitCount <= self.writeDoneCount || self.error)) {
-                self.fflushCbs.shift().cb(self.error);
+            while (self.flushCbs.length && (self.flushCbs[0].awaitCount <= self.writeDoneCount || self.error)) {
+                self.flushCbs.shift().cb(self.error);
             }
             if (self.writeDoneCount === self.writePendingCount) self.writeDoneCount = self.writePendingCount = 0;
             if (self.writestring) writechunk(); // keep writing if more data arrived
@@ -191,8 +191,6 @@ QFifo.prototype._writesome = function _writesome( ) {
         })
     }
 }
-
-QFifo.prototype = toStruct(QFifo.prototype);
 
 // 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+'
 function writeHeaderSync( filename, contents ) {
@@ -203,4 +201,9 @@ function writeHeaderSync( filename, contents ) {
     return fs.writeSync(fd, buf, 0, buf.length, null);
 }
 
+// aliases
+QFifo.prototype.fflush = QFifo.prototype.flush;
+QFifo.prototype.wsync = QFifo.prototype.flush;
+
+QFifo.prototype = toStruct(QFifo.prototype);
 function toStruct(hash) { return toStruct.prototype = hash }

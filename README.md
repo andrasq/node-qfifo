@@ -56,7 +56,7 @@ It is safe to open the fifo more than once, the duplicate calls are harmless.  N
 ### fifo.close( )
 
 Close the file descriptor.  The fifo will not be usable until it is reopened.  Closing the fifo
-while still writing will produce a write error; use fflush().
+while still writing will produce a write error; sync first with `flush()`.
 
 ### fifo.putline( line )
 
@@ -70,10 +70,10 @@ must periodically yield the cpu for the writes to happen.  Any write errors are 
 
 Internal fifo append method that does not mandate newlines.  Use with caution.
 
-### fifo.fflush( callback )
+### fifo.flush( callback )
 
 Invoke callback() once the currently buffered writes have completed.  New writes made after the
-fflush call are not waited for (but may still have been included in the batch).
+flush call are not waited for (but may still have been included in the batch).
 
 ### line = fifo.getline( )
 
