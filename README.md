@@ -140,19 +140,13 @@ no more lines are left in the buffer.  Appending lines to the fifo and retrying 
 the `eof` flag.
 
 
-See Also
-----------------
-- qfgets
-- qfputs
-- Quick_Fifo_File in quicklib
-
-
 Todo
 ----------------
 
 - `preopen` option
 - make `r`-mode `open` run `_getmore` and wait for results before returning
 - allow for streaming Buffers straight to file
+- maybe queue pending writes and have _writesome() write the queued parts
 
 
 Changelog
