@@ -194,26 +194,25 @@ QFifo.prototype._writesome = function _writesome( ) {
 }
 
 /*
- * rename name.1 -> name.2, name.2 -> name.3 etc
- * Does not rename name to name.1 in case name is being accessed or has a .hd file
+ * rename name -> name.1, name.1 -> name.2, name.2 -> name.3 etc
  */
 QFifo.prototype._rotateBacklog = function rotateBacklog( filename, callback ) {
     // TODO: escape regex metacharacters in filename
-    var rotatedNames = new RegExp('^' + filename + '\.([0-9]+)$');
+    var rotatedNames = new RegExp('^' + filename + '(\.([0-9]+))?$');
     fs.readdir(path.basename(filename), function(err, files) {
-        if (err) return callback(err, [err]);
-        var errors = [];
+        if (err) return callback(err, [err], []);
+        var names = [], errors = [];
         var matches = files
             .map(function(name) { return name.match(rotatedNames) })
             .filter(function(m1) { return !!m1 })
-            .sort(function(m1, m2) { return m2[1] - m1[1] });   // descending
+            .sort(function(m1, m2) { return m1[2] && m2[2] ? m2[2] - m1[2] : m1[2] ? -1 : +1 });   // descending
         for (var i = 0; i < matches.length; i++) {
-            var nextSuffix = parseInt(matches[i][1] || '0') + 1;
-            try { fs.renameSync(matches[i][0], filename + '.' + nextSuffix) }
+            var nextName = filename + '.' + (parseInt(matches[i][2] || '0') + 1);
+            try { fs.renameSync(matches[i][0], nextName); names.push(nextName) }
             catch (err) { errors.push(err) };
             // TODO: retain the original timestamp on rotated files
         }
-        callback(errors[0], errors);
+        callback(errors[0], errors, names);
     })
 }
 

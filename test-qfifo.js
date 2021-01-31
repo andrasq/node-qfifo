@@ -586,17 +586,20 @@ module.exports = {
         },
 
         '_rotateBacklog': {
-            'renames all numerically-suffixed files': function(t) {
+            'renames all matching files': function(t) {
                 var uut = new QFifo('fifoname');
-                t.stubOnce(fs, 'readdir').yields(null, ['fifoname.1', 'fifoname.2', 'fifoname.3']);
-                var spy = t.stub(fs, 'renameSync');
-                uut._rotateBacklog('fifoname', function(err, ret) {
+                t.stubOnce(fs, 'readdir').yields(null, ['fifoname', 'fifoname.1', 'fifoname.4', 'fifoname.3']);
+                var spy = t.stub(fs, 'renameSync').configure('saveLimit', 10);
+                uut._rotateBacklog('fifoname', function(err, ret, names) {
                     spy.restore();
-                    t.deepEqual(spy.args[0], ['fifoname.3', 'fifoname.4']);
-                    t.deepEqual(spy.args[1], ['fifoname.2', 'fifoname.3']);
+                    t.equal(spy.callCount, 4);
+                    t.deepEqual(spy.args[0], ['fifoname.4', 'fifoname.5']);
+                    t.deepEqual(spy.args[1], ['fifoname.3', 'fifoname.4']);
+                    // missing file is not rotated
                     t.deepEqual(spy.args[2], ['fifoname.1', 'fifoname.2']);
-                    // should not rename fifoname itself
-                    t.equal(spy.callCount, 3);
+                    // the original fifo file is rotated too
+                    t.deepEqual(spy.args[3], ['fifoname', 'fifoname.1']);
+                    t.deepEqual(names, ['fifoname.5', 'fifoname.4', 'fifoname.2', 'fifoname.1']);
                     t.done();
                 })
             },
@@ -604,23 +607,26 @@ module.exports = {
             'returns readdir errors': function(t) {
                 var uut = new QFifo('fifoname');
                 t.stubOnce(fs, 'readdir').yields('mock-readdir-error');
-                uut._rotateBacklog('fifoname', function(err, errors) {
+                uut._rotateBacklog('fifoname', function(err, errors, names) {
                     t.equal(err, 'mock-readdir-error');
                     t.deepEqual(errors, ['mock-readdir-error']);
+                    t.deepEqual(names, []);
                     t.done();
                 })
             },
 
-            'returns all rename errors': function(t) {
+            'returns the rename errors and new filenames': function(t) {
                 var uut = new QFifo('fifoname');
                 t.stubOnce(fs, 'readdir').yields(null, ['fn.1', 'fn.2', 'fn.3']);
                 var errors = ['mock-err1', 'mock-err2'];
-                var spy = t.stub(fs, 'renameSync', function() { throw errors.shift()});
-                uut._rotateBacklog('fn', function(err, errors) {
+                var spy = t.stub(fs, 'renameSync', function() { throw errors.shift() });
+                uut._rotateBacklog('fn', function(err, errors, names) {
                     spy.restore();
                     t.equal(spy.callCount, 3);
                     t.equal(err, 'mock-err1');
                     t.deepEqual(errors, ['mock-err1', 'mock-err2']);
+                    // 3->4 fails, 2->3 fails 1-2 succeeds
+                    t.deepEqual(names, ['fn.2']);
                     t.done();
                 })
             },
