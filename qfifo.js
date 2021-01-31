@@ -196,7 +196,7 @@ QFifo.prototype._writesome = function _writesome( ) {
 /*
  * rename name -> name.1, name.1 -> name.2, name.2 -> name.3 etc
  */
-QFifo.prototype._rotateBacklog = function rotateBacklog( filename, callback ) {
+QFifo.prototype.rotateFiles = function rotateFiles( filename, callback ) {
     // TODO: escape regex metacharacters in filename
     var rotatedNames = new RegExp('^' + filename + '(\.([0-9]+))?$');
     fs.readdir(path.basename(filename), function(err, files) {

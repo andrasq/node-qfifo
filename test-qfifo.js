@@ -585,12 +585,13 @@ module.exports = {
             },
         },
 
-        '_rotateBacklog': {
+        'rotateFiles': {
             'renames all matching files': function(t) {
                 var uut = new QFifo('fifoname');
-                t.stubOnce(fs, 'readdir').yields(null, ['fifoname', 'fifoname.1', 'fifoname.4', 'fifoname.3']);
+                // mix up filename order to test the internal sorting
+                t.stubOnce(fs, 'readdir').yields(null, ['fifoname.4', 'fifoname', 'fifoname.1', 'fifoname.3']);
                 var spy = t.stub(fs, 'renameSync').configure('saveLimit', 10);
-                uut._rotateBacklog('fifoname', function(err, ret, names) {
+                uut.rotateFiles('fifoname', function(err, ret, names) {
                     spy.restore();
                     t.equal(spy.callCount, 4);
                     t.deepEqual(spy.args[0], ['fifoname.4', 'fifoname.5']);
@@ -607,7 +608,7 @@ module.exports = {
             'returns readdir errors': function(t) {
                 var uut = new QFifo('fifoname');
                 t.stubOnce(fs, 'readdir').yields('mock-readdir-error');
-                uut._rotateBacklog('fifoname', function(err, errors, names) {
+                uut.rotateFiles('fifoname', function(err, errors, names) {
                     t.equal(err, 'mock-readdir-error');
                     t.deepEqual(errors, ['mock-readdir-error']);
                     t.deepEqual(names, []);
@@ -620,7 +621,7 @@ module.exports = {
                 t.stubOnce(fs, 'readdir').yields(null, ['fn.1', 'fn.2', 'fn.3']);
                 var errors = ['mock-err1', 'mock-err2'];
                 var spy = t.stub(fs, 'renameSync', function() { throw errors.shift() });
-                uut._rotateBacklog('fn', function(err, errors, names) {
+                uut.rotateFiles('fn', function(err, errors, names) {
                     spy.restore();
                     t.equal(spy.callCount, 3);
                     t.equal(err, 'mock-err1');
