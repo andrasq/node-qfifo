@@ -593,7 +593,7 @@ module.exports = {
                 var fn = uut.batchCalls(function(batch, cb) { batchCount += 1; cb() });
                 t.equal(typeof fn, 'function');
                 for (var i = 0; i < 997; i++) fn(i, function() { cbCount += 1 });
-                setImmediate(function() {
+                setTimeout(function() {
                     t.equal(batchCount, Math.ceil(997 / 10));
                     t.equal(cbCount, 997);
                     t.done();
@@ -606,7 +606,7 @@ module.exports = {
                 var ndone = 0;
                 var func = uut.batchCalls(function(batch, cb) { batches.push(batch); cb() }, { maxBatchSize: 4 });
                 for (var i = 0; i < 10; i++) func(i);
-                setImmediate(function() {
+                setTimeout(function() {
                     t.deepEqual(batches, [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]);
                     t.done();
                 })
