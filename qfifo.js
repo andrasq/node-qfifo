@@ -193,6 +193,54 @@ QFifo.prototype._writesome = function _writesome( ) {
     }
 }
 
+QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
+    options = options || {};
+    var maxWaitMs = options.maxWaitMs >= 0 ? options.maxWaitMs : 0;
+    var maxBatchSize = options.maxBatchSize >= 1 ? options.maxBatchSize : 10;
+    var startBatch = typeof options.startBatch === 'function' ? options.startBatch : null;
+    var growBatch = typeof options.growBatch === 'function' ? options.growBatch : null;
+
+    // prepare for the next (first) batch by processing the current (-1) batch
+    var timer = null, itemCount = -1, batch = [], batchCbs = [];
+    doProcessBatch();
+
+    return function processItem(item, cb) {
+        // add the item to the current batch
+        growBatch ? growBatch(batch, item) : batch.push(item);
+        cb && batchCbs.push(cb);
+        itemCount += 1;
+        // process the batch when the batch size and/or wait time are reached
+        // if the allowed wait time is 0 then process the batch on next process tick
+        if (itemCount >= maxBatchSize) doProcessBatch();
+        else if (!timer) timer = (maxWaitMs > 0) ? setTimeout(doProcessBatch, maxWaitMs) : (process.nextTick(doProcessBatch), true);
+    }
+
+    // grab the items in the batch so far, and process them after an optional delay
+    function doProcessBatch() {
+        clearTimeout(timer);
+        timer = null;
+        var thisBatch = batch;
+        var thisCbs = batchCbs;
+        var thisItemCount = itemCount;
+        // reuse the old batch if still empty, else start a new batch
+        if (itemCount !== 0) {
+            batch = startBatch ? startBatch(maxBatchSize) : new Array();
+            batchCbs = new Array();
+            itemCount = 0;
+        }
+        // batch processing is allowed to overlap; io inherently serializes, or use eg quickq
+        // thisItemCount will only be 0 if a scheduled batch filled up and has already been processed
+        // process the batch nextTick so if more items are added they will be processed in order
+        if (thisItemCount > 0) process.nextTick(function() {
+            processBatchFunc(thisBatch, function(err) {
+                // an error received from the batch errors out all items in the batch
+                for (var i = 0; i < thisCbs.length; i++) thisCbs[i](err);
+                // TODO: should batch errors affect subsequent batches too?
+            })
+        })
+    }
+}
+
 /*
  * rename name -> name.1, name.1 -> name.2, name.2 -> name.3 etc
  */

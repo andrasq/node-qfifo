@@ -585,6 +585,58 @@ module.exports = {
             },
         },
 
+        'batchCalls': {
+            'returns a function that calls its callback': function(t) {
+                var uut = new QFifo('fn');
+                var cbCount = 0;
+                var batchCount = 0;
+                var fn = uut.batchCalls(function(batch, cb) { batchCount += 1; cb() });
+                t.equal(typeof fn, 'function');
+                for (var i = 0; i < 997; i++) fn(i, function() { cbCount += 1 });
+                setImmediate(function() {
+                    t.equal(batchCount, Math.ceil(997 / 10));
+                    t.equal(cbCount, 997);
+                    t.done();
+                })
+            },
+
+            'batches into groups of maxBatchSize': function(t) {
+                var uut = new QFifo('fn');
+                var batches = [];
+                var ndone = 0;
+                var func = uut.batchCalls(function(batch, cb) { batches.push(batch); cb() }, { maxBatchSize: 4 });
+                for (var i = 0; i < 10; i++) func(i);
+                setImmediate(function() {
+                    t.deepEqual(batches, [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]);
+                    t.done();
+                })
+            },
+
+            'uses custom batching function and specified delay': function(t) {
+                var uut = new QFifo('fn');
+                var batch = [];
+                var firstCbTime = null;
+                var lastCbTime = null;
+                var fn = uut.batchCalls(function(batch, cb) { cb() }, {
+                    maxWaitMs: 10,
+                    maxBatchSize: 4,
+                    startBatch: function(max) { return batch },
+                    growBatch: function(bb, item) { t.equal(bb, batch); batch.push(item) },
+                });
+                var startTime = Date.now();
+                for (var i = 0; i < 5; i++) fn(i, function(){ firstCbTime = firstCbTime || Date.now(); lastCbTime = Date.now() });
+                setTimeout(function() {
+                    // first batch reaches maxBatchSize and is processed immediately
+                    t.ok(firstCbTime >= startTime);
+                    // second batch waits 10 ms before being processed
+                    t.ok(lastCbTime >= startTime + 10 - 1);
+                    // each separate callback should have been called in order
+                    t.deepEqual(batch, [0, 1, 2, 3, 4]);
+                    t.done();
+                }, 30);
+            },
+        },
+
         'rotateFiles': {
             'renames all matching files': function(t) {
                 var uut = new QFifo('fifoname');

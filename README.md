@@ -152,7 +152,7 @@ Todo
 Changelog
 ----------------
 
-- 0.4.0 - `rotateFiles` helper
+- 0.4.0 - `rotateFiles` helper, fledgeling `batchCalls` helper
 - 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`
           only when no more lines available
 - 0.2.2 - allow writing Buffers, space-pad header files
