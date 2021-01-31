@@ -584,6 +584,47 @@ module.exports = {
                 }, 5);
             },
         },
+
+        '_rotateBacklog': {
+            'renames all numerically-suffixed files': function(t) {
+                var uut = new QFifo('fifoname');
+                t.stubOnce(fs, 'readdir').yields(null, ['fifoname.1', 'fifoname.2', 'fifoname.3']);
+                var spy = t.stub(fs, 'renameSync');
+                uut._rotateBacklog('fifoname', function(err, ret) {
+                    spy.restore();
+                    t.deepEqual(spy.args[0], ['fifoname.3', 'fifoname.4']);
+                    t.deepEqual(spy.args[1], ['fifoname.2', 'fifoname.3']);
+                    t.deepEqual(spy.args[2], ['fifoname.1', 'fifoname.2']);
+                    // should not rename fifoname itself
+                    t.equal(spy.callCount, 3);
+                    t.done();
+                })
+            },
+
+            'returns readdir errors': function(t) {
+                var uut = new QFifo('fifoname');
+                t.stubOnce(fs, 'readdir').yields('mock-readdir-error');
+                uut._rotateBacklog('fifoname', function(err, errors) {
+                    t.equal(err, 'mock-readdir-error');
+                    t.deepEqual(errors, ['mock-readdir-error']);
+                    t.done();
+                })
+            },
+
+            'returns all rename errors': function(t) {
+                var uut = new QFifo('fifoname');
+                t.stubOnce(fs, 'readdir').yields(null, ['fn.1', 'fn.2', 'fn.3']);
+                var errors = ['mock-err1', 'mock-err2'];
+                var spy = t.stub(fs, 'renameSync', function() { throw errors.shift()});
+                uut._rotateBacklog('fn', function(err, errors) {
+                    spy.restore();
+                    t.equal(spy.callCount, 3);
+                    t.equal(err, 'mock-err1');
+                    t.deepEqual(errors, ['mock-err1', 'mock-err2']);
+                    t.done();
+                })
+            },
+        },
     },
 
     'speed': {

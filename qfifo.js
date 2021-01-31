@@ -10,6 +10,7 @@
 'use strict'
 
 var fs = require('fs');
+var path = require('path');
 var sd = require('string_decoder');
 
 module.exports = QFifo;
@@ -190,6 +191,30 @@ QFifo.prototype._writesome = function _writesome( ) {
             else self.writing = false;
         })
     }
+}
+
+/*
+ * rename name.1 -> name.2, name.2 -> name.3 etc
+ * Does not rename name to name.1 in case name is being accessed or has a .hd file
+ */
+QFifo.prototype._rotateBacklog = function rotateBacklog( filename, callback ) {
+    // TODO: escape regex metacharacters in filename
+    var rotatedNames = new RegExp('^' + filename + '\.([0-9]+)$');
+    fs.readdir(path.basename(filename), function(err, files) {
+        if (err) return callback(err, [err]);
+        var errors = [];
+        var matches = files
+            .map(function(name) { return name.match(rotatedNames) })
+            .filter(function(m1) { return !!m1 })
+            .sort(function(m1, m2) { return m2[1] - m1[1] });   // descending
+        for (var i = 0; i < matches.length; i++) {
+            var nextSuffix = parseInt(matches[i][1] || '0') + 1;
+            try { fs.renameSync(matches[i][0], filename + '.' + nextSuffix) }
+            catch (err) { errors.push(err) };
+            // TODO: retain the original timestamp on rotated files
+        }
+        callback(errors[0], errors);
+    })
 }
 
 // 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+'
