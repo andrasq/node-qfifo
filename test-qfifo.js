@@ -755,14 +755,22 @@ module.exports = {
             writeall(fifo, lines, function(err) {
                 t.ifError(err);
                 var nlines = 0;
+                var eofSeen = false;
+                var lastLine;
                 console.time("AR: readlines 200B x100k");
                 fifo.readlines(function(line) {
+                    lastLine = line;
                     nlines += 1;
                     if (fifo.eof) {
-                        console.timeEnd("AR: readlines 200B x100k");
+                        if (!eofSeen) console.timeEnd("AR: readlines 200B x100k");
                         // about 6.7m/s 200b lines (9.8/s w/o updatePosition)
-                        t.equal(nlines, 100000);
-                        t.done();
+                        setTimeout(function() {
+                            t.equal(nlines, 100001);
+                            t.equal(lastLine, 'one more line to test fs.watch\n');
+                            t.done();
+                        }, 10);
+                        if (!eofSeen) fifo.putline('one more line to test fs.watch\n');
+                        eofSeen = true;
                     }
                 })
             })
