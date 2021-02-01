@@ -127,14 +127,14 @@ QFifo.prototype.getline = function getline( ) {
     if (eol >= 0) {
         var line = this.readstring.slice(this.readstringoffset, this.readstringoffset = eol + 1);
         if (this.options.updatePosition) this.position += Buffer.byteLength(line);
-        if (this.readstringoffset >= this.readstring.length && this._eof) { this.eof = true; this.readlinesLoop = function(){} }
+        if (this._eof && this.readstringoffset >= this.readstring.length) { this.eof = true }
         return line;
     } else {
         // TODO: reading multi-chunk lines is inefficient, even the indexOf() is O(n^2)
         if (this.readstringoffset > 0) this.readstring = this.readstring.slice(this.readstringoffset);
         this.readstringoffset = 0;
         this._readsome();
-        if (this._eof) { this.eof = true; this.readlinesLoop = function(){} }
+        if (this._eof) { this.eof = true }
         return '';
     }
 }
