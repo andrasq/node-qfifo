@@ -124,6 +124,35 @@ Suspend the `readlines` loop, do not deliver any more lines until resumed.
 
 Resume the `readlines` loop, start delivering lines again.
 
+### fifo.rotateFiles( filename, callback(err, errors, names) )
+
+Helper method to rename the `filename` to `filename.1`.  If `filename.1` already exists, rename
+it to `filename.2` and so on for all older versions of `filename`.  Calls `callback` when done
+with the first error encountered, an array with all rename errors, and the list of successfully
+renamed filenames.
+
+### fifo.batchCalls( processBatch(batch, done(err)) [,options] )
+
+Helper method to help process items in batches.  Returns a function to be called with each item,
+and `processBatch` will be called once with each batch of items.
+
+    var processItem = fifo.batchCalls(function processBatch(batch, cb) {
+        // first call => [1, 2]
+        // second call => [3]
+        cb();
+    }, { maxBatchSize: 2 });
+    processItem(1);
+    processItem(2);
+    processItem(3);
+
+Options:
+- `maxWaitMs` - how long to wait for more items before processing the batch.  Default 0, to process immediately.
+- `maxBatchSize` - the cap on how large a batch may grow before it will be processed.  Default 10.
+- `startBatch` - function to call with `maxBatchSize` to obtain an empty batch.  The empty batch is
+   populated with `push(item)` or with `growBatch(item)`.  Default empty batch is an empty array `[]`.
+- `growBatch` - function to call to add an item to the batch, called with `batch` and `item`.
+   Default is `batch.push`.
+
 ### fifo.position
 
 Byte offset of the next unseen line in the input file.
@@ -152,7 +181,7 @@ Todo
 Changelog
 ----------------
 
-- 0.4.0 - `rotateFiles` helper, fledgeling `batchCalls` helper
+- 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper
 - 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`
           only when no more lines available
 - 0.2.2 - allow writing Buffers, space-pad header files
