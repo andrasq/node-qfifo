@@ -124,6 +124,12 @@ Suspend the `readlines` loop, do not deliver any more lines until resumed.
 
 Resume the `readlines` loop, start delivering lines again.
 
+### fifo.matchFiles( dirname, regex, callback(err, matches) )
+
+Return the match results of all filenames in the directory that satisfy the regular expression.
+The match results are produced by `filename.match(regex)` so that `match[0]` is always the
+original filename.  The matches are not sorted.
+
 ### fifo.rotateFiles( filename, callback(err, errors, names) )
 
 Helper method to rename the `filename` to `filename.1`.  If `filename.1` already exists, rename
@@ -176,6 +182,9 @@ Todo
 - make `r`-mode `open` run `_getmore` and wait for results before returning
 - allow for streaming Buffers straight to file
 - maybe queue pending writes and have _writesome() write the queued parts
+- `clear()` call to discard contents and remove .hd
+- `compact()` call to quick-copy repack the fifo contents
+- optional `concurrent` true/false batchCalls config setting (default true)
 
 
 Changelog

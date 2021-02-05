@@ -258,12 +258,10 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
 QFifo.prototype.rotateFiles = function rotateFiles( filename, callback ) {
     // TODO: escape regex metacharacters in filename
     var rotatedNames = new RegExp('^' + filename + '(\.([0-9]+))?$');
-    fs.readdir(path.basename(filename), function(err, files) {
+    this.matchFiles(path.basename(filename), rotatedNames, function(err, matches) {
         if (err) return callback(err, [err], []);
         var names = [], errors = [];
-        var matches = files
-            .map(function(name) { return name.match(rotatedNames) })
-            .filter(function(m1) { return !!m1 })
+        matches = matches
             .sort(function(m1, m2) { return m1[2] && m2[2] ? m2[2] - m1[2] : m1[2] ? -1 : +1 });   // descending
         for (var i = 0; i < matches.length; i++) {
             var nextName = filename + '.' + (parseInt(matches[i][2] || '0') + 1);
@@ -272,6 +270,21 @@ QFifo.prototype.rotateFiles = function rotateFiles( filename, callback ) {
             // TODO: retain the original timestamp on rotated files
         }
         callback(errors[0], errors, names);
+    })
+}
+
+/*
+ * return the matches for the regex among the filenames in the directory
+ * For each match in matches[], match[0] is the original filename.
+ */
+QFifo.prototype.matchFiles = function matchFiles( dirname, matchRegex, callback ) {
+    fs.readdir(dirname, function(err, files) {
+        if (err) return callback(err, [err], []);
+        var names = [], errors = [];
+        var matches = files
+            .map(function(name) { return name.match(matchRegex) })
+            .filter(function(m1) { return !!m1 });
+        callback(null, matches);
     })
 }
 
