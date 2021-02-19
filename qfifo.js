@@ -309,7 +309,6 @@ QFifo.prototype.rotateFiles = function rotateFiles( filename, callback ) {
             var nextName = filename + '.' + (parseInt(matches[i][2] || '0') + 1);
             try { fs.renameSync(matches[i][0], nextName); names.push(nextName) }
             catch (err) { errors.push(err) };
-            // TODO: retain the original timestamp on rotated files
         }
         callback(errors[0], errors, names);
     })
