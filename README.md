@@ -47,6 +47,8 @@ Options may contain the following settings:
 - `updatePosition`: whether to update `fifo.position` with the byte offset in the file of the
   next line to be read.  Default `true`.  `position` is needed to checkpoint the read state, but
   omitting it is 25% faster.
+- `reopenInterval`: how frequently to reopen the fifo file, -1 never.  Default every 20 ms
+  to ensure that writes will cease after a rename.
 
 ### fifo.open( callback(err, fd) )
 
@@ -133,7 +135,7 @@ original filename.  The matches are not sorted.
 ### fifo.rotateFiles( filename, callback(err, errors, names) )
 
 Helper method to rename the `filename` to `filename.1`.  If `filename.1` already exists, rename
-it to `filename.2` and so on for all older versions of `filename`.  Calls `callback` when done
+it to `filename.2` and so on for all older versions of `filename`.  When done, calls `callback`
 with the first error encountered, an array with all rename errors, and the list of successfully
 renamed filenames.
 
@@ -190,6 +192,7 @@ Todo
 Changelog
 ----------------
 
+- 0.5.0 - `matchFiles` method, `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper
 - 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`
           only when no more lines available

@@ -293,7 +293,7 @@ module.exports = {
 
         'can read split multi-char utf8 characters': {
             'split start char': function(t) {
-                var fifo = new QFifo(this.tempfile);
+                var fifo = new QFifo(this.tempfile, { reopenInterval: 20 });
                 fifo.getline();
                 setTimeout(function() {
                     t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {
@@ -312,7 +312,7 @@ module.exports = {
             },
 
             'split last char': function(t) {
-                var fifo = new QFifo(this.tempfile);
+                var fifo = new QFifo(this.tempfile, { reopenInterval: 20 });
                 fifo.getline();
                 setTimeout(function() {
                     t.stubOnce(fs, 'read', function(fd, buf, start, count, position, cb) {

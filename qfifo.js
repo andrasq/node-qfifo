@@ -27,6 +27,7 @@ function QFifo( filename, options ) {
         readSize:       getOption(options, 'readSize', 'number', 64 * 1024),
         writeSize:      getOption(options, 'writeSize', 'number', 16 * 1024),
         writeDelay:     getOption(options, 'writeDelay', 'number', 2),
+        reopenInterval: getOption(options, 'reopenInterval', 'number', 20),
         updatePosition: getOption(options, 'updatePosition', 'boolean', true),
     };
     if (!filename) throw new Error('missing filename');
@@ -36,6 +37,7 @@ function QFifo( filename, options ) {
     this.filename = filename;
     this.headername = filename + '.hd';
     this.fd = -1;
+    this.reopenTime = -1;
 
     this.eof = false;           // no more lines until more written
     this.error = null;          // read error, bad file
@@ -67,13 +69,16 @@ function getOption(opts, name, type, _default) {
 }
 
 QFifo.prototype.open = function open( callback ) {
-    var self = this;
+    var self = this, reopenOnly;
+    if (this.fd >= 0 && this.reopenTime > 0 && new Date() > this.reopenTime) { reopenOnly = true; this.close() }
     if (this.fd >= 0 || this.error) return callback(this.error, this.fd);
     this.openCbs.push(callback);
     if (this.fd === -1) this.fd = -2; else return; // mutex the openers
     fs.open(this.filename, this.options.flag, function(err, fd) {
         self.fd = err ? -1 : fd;
         if (err) { self.error = err; self.eof = self._eof = true; self._runCallbacks(self.openCbs, err, self.fd); return }
+        self.reopenTime = self.options.reopenInterval > 0 ? Date.now() + self.options.reopenInterval : -1;
+        if (reopenOnly) return self._runCallbacks(self.openCbs, err, self.fd);
         fs.readFile(self.headername, function(err2, header) {
             try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
             self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : 0;
