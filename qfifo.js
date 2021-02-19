@@ -77,7 +77,7 @@ QFifo.prototype.open = function open( callback ) {
     fs.open(this.filename, this.options.flag, function(err, fd) {
         self.fd = err ? -1 : fd;
         if (err) { self.error = err; self.eof = self._eof = true; self._runCallbacks(self.openCbs, err, self.fd); return }
-        self.reopenTime = self.options.reopenInterval > 0 ? Date.now() + self.options.reopenInterval : -1;
+        if (self.options.reopenInterval > 0) self.reopenTime = Date.now() + self.options.reopenInterval;
         if (reopenOnly) return self._runCallbacks(self.openCbs, err, self.fd);
         fs.readFile(self.headername, function(err2, header) {
             try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
@@ -99,6 +99,7 @@ QFifo.prototype.putline = function putline( str ) {
     // faster to append a newline here than to write a newline separately,
     // even though both are just concatenated to this.writestring.
     // TODO: allow for Buffers without converting first (to stream incoming data to fifo)
+    // note: buffers must contain entire lines
     if (typeof str !== 'string') str = Buffer.isBuffer(str) ? str.toString(): String(str);
     str.charCodeAt(str.length - 1) === CH_NL ? this.write(str) : this.write(str + '\n');
 }
@@ -258,6 +259,24 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
             })
         })
     }
+}
+
+/*
+ * rename the fifo filename to newName, and filename.hd to newName.hd
+ * Keep the fd open, let reads and writes continue as before.
+ */
+QFifo.prototype.rename = function rename( newName, callback ) {
+    var self = this;
+    // TODO: maybe overwrite any existing fifo?
+    fs.rename(self.filename, newName, function(err) {
+        if (err) return callback(err);
+        fs.rename(self.headername, newName + '.hd', function(err2) {
+            if (err && err.code !== 'ENOENT') return callback(err2);
+            self.filename = newName;
+            self.headername = newName + '.hd';
+            callback();
+        })
+    })
 }
 
 /*

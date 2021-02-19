@@ -351,6 +351,42 @@ module.exports = {
             })
         },
 
+        'can read with reopening': function(t) {
+            var str = new Array(200e3).join('x\n');
+            var fifo = new QFifo(this.tempfile, { flag: 'a+', reopenInterval: 1 });
+            fifo.putline(str);
+            fifo.wsync(function(err) {
+                t.ifError(err);
+                var spy = t.spy(fs, 'closeSync');
+                readall(fifo, [], function(err, lines) {
+                    spy.restore();
+                    t.ifError(err);
+                    t.equal(lines.length, 200e3 - 1);
+                    t.equal(lines[0], 'x\n');
+                    t.ok(spy.callCount > 1);
+                    t.done();
+                })
+            })
+        },
+
+        'can read without reopening': function(t) {
+            var str = new Array(200e3).join('x\n');
+            var fifo = new QFifo(this.tempfile, { flag: 'a+', reopenInterval: -1 });
+            fifo.putline(str);
+            fifo.wsync(function(err) {
+                t.ifError(err);
+                var spy = t.spy(fs, 'closeSync');
+                readall(fifo, [], function(err, lines) {
+                    spy.restore();
+                    t.ifError(err);
+                    t.equal(lines.length, 200e3 - 1);
+                    t.equal(lines[0], 'x\n');
+                    t.equal(spy.callCount, 0);
+                    t.done();
+                })
+            })
+        },
+
         'can read and write the same fifo': function(t) {
             var fifo = this.wfifo;
 
@@ -635,6 +671,65 @@ module.exports = {
                     t.deepEqual(batch, [0, 1, 2, 3, 4]);
                     t.done();
                 }, 30);
+            },
+        },
+
+        'rename': {
+            'renames the fifo': function(t) {
+                var tempfile = this.tempfile;
+                var fifo = this.wfifo;
+                fifo.putline('line1');
+                fifo.flush(function(err) {
+                    t.ifError(err);
+                    fifo.rename(fifo.filename + '.0', function(err) {
+                        t.ifError(err);
+                        t.equal(fifo.filename, tempfile + '.0');
+                        t.equal(fifo.headername, tempfile + '.0.hd');
+                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line1\n');
+                        fs.unlinkSync(tempfile + '.0');
+                        t.done();
+                    })
+                })
+            },
+            'renames the fifo and header': function(t) {
+                var tempfile = this.tempfile;
+                var fifo = this.rfifo;
+                // sync to write header file
+                fifo.rsync(function(err) {
+                    fifo.rename(fifo.filename + '-new', function(err) {
+                        t.ifError(err);
+                        t.equal(fifo.filename, tempfile + '-new');
+                        t.equal(fifo.headername, tempfile + '-new.hd');
+                        // unlinks must succeed, file and header must exist by their new names
+                        fs.unlinkSync(fifo.filename);
+                        fs.unlinkSync(fifo.headername);
+                        t.done();
+                    })
+                })
+            },
+            'returns error if unable to rename file': function(t) {
+                var fifo = this.wfifo;
+                fifo.remove(function() {
+                    fifo.rename('/tmp/notfound', function(err) {
+                        t.equal(err && err.code, 'ENOENT');
+                        t.done();
+                    })
+                })
+            },
+            'returns error if unable to rename header': function(t) {
+                // fs.rename overwrites an existing file, need a different test
+                t.skip();
+
+                var fifo = this.wfifo;
+                fs.writeFileSync(fifo.headername, '{}');
+                fs.writeFileSync('/tmp/test-qfifo-new.hd', '');
+                fifo.rename('/tmp/test-qfifo-new', function(err) {
+                    t.equal(err && err.code, 'EEXIST');
+                    //try { fs.unlinkSync('/tmp/test-qfifo-new') } catch (e) {}
+                    fs.unlinkSync('/tmp/test-qfifo-new');
+                    fs.unlinkSync('/tmp/test-qfifo-new.hd');
+                    t.done();
+                })
             },
         },
 
