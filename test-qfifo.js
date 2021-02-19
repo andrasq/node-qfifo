@@ -756,17 +756,11 @@ module.exports = {
                 })
             },
             'returns error if unable to rename header': function(t) {
-                // fs.rename overwrites an existing file, need a different test
-                t.skip();
-
-                var fifo = this.wfifo;
-                fs.writeFileSync(fifo.headername, '{}');
-                fs.writeFileSync('/tmp/test-qfifo-new.hd', '');
-                fifo.rename('/tmp/test-qfifo-new', function(err) {
-                    t.equal(err && err.code, 'EEXIST');
-                    //try { fs.unlinkSync('/tmp/test-qfifo-new') } catch (e) {}
-                    fs.unlinkSync('/tmp/test-qfifo-new');
-                    fs.unlinkSync('/tmp/test-qfifo-new.hd');
+                this.wfifo.headername = '/';
+                this.wfifo.rename('/tmp/test-qfifo-new', function(err) {
+                    // t.equal(err && err.code, 'EEXIST');  // getting EXDEV, but could also be EISDIR or EACCESS
+                    t.ok(err);
+                    t.ok(/\.hd/.test(err.message));
                     t.done();
                 })
             },

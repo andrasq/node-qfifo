@@ -286,7 +286,7 @@ QFifo.prototype.rename = function rename( newName, callback ) {
         // do not leave the previous .hd if fifo has none
         try { fs.unlinkSync(newName + '.hd') } catch (e) {}
         fs.rename(self.headername, newName + '.hd', function(err2) {
-            if (err && err.code !== 'ENOENT') return callback(err2);
+            if (err2 && err2.code !== 'ENOENT') return callback(err2);
             self.filename = newName;
             self.headername = newName + '.hd';
             callback();
