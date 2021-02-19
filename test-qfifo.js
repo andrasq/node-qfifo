@@ -55,6 +55,7 @@ module.exports = {
             t.ifError(err);
             var line, lines = [];
             readall(fifo, new Array(), function(err, lines) {
+                t.ifError(err);
                 t.equal(lines.join(''), String(fs.readFileSync(__filename)));
                 fifo.close();
                 t.done();

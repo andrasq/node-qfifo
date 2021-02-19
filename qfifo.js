@@ -139,6 +139,8 @@ QFifo.prototype.getline = function getline( ) {
     }
 }
 
+// deliver all lines in the fifo to `visitor(line)`
+// Only one reader at a time, a second call to readline() will displace the first reader
 QFifo.prototype.pause = function pause( ) { this.readlinesPaused = true }
 QFifo.prototype.resume = function resume( ) { this.readlinesPaused = false; this.readlinesLoop() }
 QFifo.prototype.readlines = function readlines( visitor ) {
@@ -149,7 +151,7 @@ QFifo.prototype.readlines = function readlines( visitor ) {
         if (!self.readlinesPaused) self._readsome();
         while (!self.readlinesPaused && (line = self.getline())) visitor(line);
         // if no more lines but not eof yet _readsome will restart loop,
-        // and if eof reached arrange to restart loop if file is appended
+        // if eof hit, arrange to restart loop when file is appended
         if (self.eof && !self.readlinesPaused) {
             var watcher = _tryWatch(self.filename, function() {
                 watcher.close();
@@ -173,7 +175,7 @@ QFifo.prototype._readsome = function _readsome( ) {
             var wasEmpty = !self.readstring;
             self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
             // if first read into empty buffer, read ahead next chunk
-            if (wasEmpty && nbytes) { self.reading = true; readchunk() }
+            if (wasEmpty && nbytes) { self.reading = true; self.open(readchunk) }
             // if readlines is active, deliver the lines from this chunk
             // FIXME: if looping before readahead, next-to-last read will get nbytes=1000 from offset 25000 instead of 720
             // thus duplicated lines and no eof.  The read after that gets the 720 and stops.
@@ -198,7 +200,7 @@ QFifo.prototype._writesome = function _writesome( ) {
                 self.flushCbs.shift().cb(self.error);
             }
             if (self.writeDoneCount === self.writePendingCount) self.writeDoneCount = self.writePendingCount = 0;
-            if (self.writestring) writechunk(); // keep writing if more data arrived
+            if (self.writestring) self.open(writechunk); // keep writing if more data arrived
             else self.writing = false;
         })
     }
