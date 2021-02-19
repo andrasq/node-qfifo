@@ -674,6 +674,45 @@ module.exports = {
             },
         },
 
+        'remove': {
+            'unlinks the fifo file': function(t) {
+                var filename = this.wfifo.filename;
+                fs.writeFileSync(filename, 'line1\n');
+                this.wfifo.remove(function(err) {
+                    fs.readFile(filename, function(err, bytes) {
+                        t.equal(err && err.code, 'ENOENT');
+                        t.done();
+                    })
+                })
+            },
+            'unlinks the header file too if it exists': function(t) {
+                var headername = this.wfifo.headername;
+                fs.writeFileSync(headername, '{}');
+                this.wfifo.remove(function(err) {
+                    fs.readFile(headername, function(err, bytes) {
+                        t.equal(err && err.code, 'ENOENT');
+                        t.done();
+                    })
+                })
+            },
+            'returns unlink errors': function(t) {
+                var wfifo = this.wfifo;
+                wfifo.remove(function(err) {
+                    wfifo.remove(function(err) {
+                        t.equal(err && err.code, 'ENOENT');
+                        t.done();
+                    })
+                })
+            },
+            'returns header unlink errors': function(t) {
+                this.wfifo.headername = '.';
+                this.wfifo.remove(function(err) {
+                    t.equal(err && err.code, 'EISDIR');
+                    t.done();
+                })
+            },
+        },
+
         'rename': {
             'renames the fifo': function(t) {
                 var tempfile = this.tempfile;

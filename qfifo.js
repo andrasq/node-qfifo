@@ -262,14 +262,29 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
 }
 
 /*
+ * remove the fifo.  Reads and writes are still possible until closed.
+ */
+QFifo.prototype.remove = function remove( callback ) {
+    var self = this;
+    fs.unlink(self.filename, function(err) {
+        if (err) return callback(err);
+        fs.unlink(self.headername, function(err2) {
+            if (err2 && err2.code === 'ENOENT') err2 = null;
+            callback(err2);
+        })
+    })
+}
+
+/*
  * rename the fifo filename to newName, and filename.hd to newName.hd
  * Keep the fd open, let reads and writes continue as before.
  */
 QFifo.prototype.rename = function rename( newName, callback ) {
     var self = this;
-    // TODO: maybe overwrite any existing fifo?
     fs.rename(self.filename, newName, function(err) {
         if (err) return callback(err);
+        // do not leave the previous .hd if fifo has none
+        try { fs.unlinkSync(newName + '.hd') } catch (e) {}
         fs.rename(self.headername, newName + '.hd', function(err2) {
             if (err && err.code !== 'ENOENT') return callback(err2);
             self.filename = newName;
