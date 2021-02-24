@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Andras Radics
+ * Copyright (C) 2020-2021 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
@@ -756,11 +756,11 @@ module.exports = {
                 })
             },
             'returns error if unable to rename header': function(t) {
-                this.wfifo.headername = '/';
+                this.wfifo.headername = '/etc/motd';
                 this.wfifo.rename('/tmp/test-qfifo-new', function(err) {
                     // t.equal(err && err.code, 'EEXIST');  // getting EXDEV, but could also be EISDIR or EACCESS
                     t.ok(err);
-                    t.ok(/\.hd/.test(err.message));
+                    t.contains(err.message, /\/etc\/motd/, "error message contains headername");
                     t.done();
                 })
             },

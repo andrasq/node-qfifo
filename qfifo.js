@@ -1,7 +1,7 @@
 /*
  * qfifo -- quick file-based fifo to buffer newline terminated data
  *
- * Copyright (C) 2020 Andras Radics
+ * Copyright (C) 2020-2021 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2020-12-20 - AR.

@@ -126,11 +126,31 @@ Suspend the `readlines` loop, do not deliver any more lines until resumed.
 
 Resume the `readlines` loop, start delivering lines again.
 
-### fifo.matchFiles( dirname, regex, callback(err, matches) )
+### fifo.compact( options, callback )
 
-Return the match results of all filenames in the directory that satisfy the regular expression.
-The match results are produced by `filename.match(regex)` so that `match[0]` is always the
-original filename.  The matches are not sorted.
+Copy the unread portion of the fifo to the start of the file.  This call assumes that all
+lines read have been successfully handled, and checkpoints the current read position, ie
+implicitly does an rsync.  The fifo should not be read or written until this call completes.
+
+### fifo.copyBytes( srcFd, dstFd, srcOffset, srcLimit, dstOffset, buff, callback(err, nbytes) )
+
+Copy the data bytes read from the file descriptor `srcFd` from between `srcOffset` and
+`srcLimit` into the file descriptor `dstFd` starting at offset `dstOffset`.  `Buff` must be an
+appropriately sized Buffer to hold the data chunks as they are processed, typically between 8
+and 64 KB.  Calls callback with the number of bytes copied.  Pass `srcLimit = Infinity` to
+copy the whole file.
+
+### fifo.remove( callback )
+
+Remove the fifo file and its header.  The fifo remains readable and writable until closed.
+Returns an error if the fifo file or header cannot be removed.  It is not an error for the
+header to not exist.
+
+### fifo.rename( name, callback )
+
+Rename the fifo file.  The fifo is not closed, it remains readable and writable.
+Returns an error if the rename fails or the fifo file does not exist.  It is not
+an error for the header file to not exist.
 
 ### fifo.rotateFiles( filename, callback(err, errors, names) )
 
@@ -138,6 +158,12 @@ Helper method to rename the `filename` to `filename.1`.  If `filename.1` already
 it to `filename.2` and so on for all older versions of `filename`.  When done, calls `callback`
 with the first error encountered, an array with all rename errors, and the list of successfully
 renamed filenames.
+
+### fifo.matchFiles( dirname, regex, callback(err, matches) )
+
+Return the match results of all filenames in the directory that satisfy the regular expression.
+The match results are produced by `filename.match(regex)` so that `match[0]` is always the
+original filename.  The matches are not sorted.
 
 ### fifo.batchCalls( processBatch(batch, done(err)) [,options] )
 
@@ -192,7 +218,7 @@ Todo
 Changelog
 ----------------
 
-- 0.6.0 - `rename` method
+- 0.6.0 - `rename` method, `remove` method, `compact` method
 - 0.5.0 - `matchFiles` method, experimental `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper
 - 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`
