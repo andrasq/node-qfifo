@@ -56,6 +56,7 @@ function QFifo( filename, options ) {
 
     // TODO: move this into Writer()
     this.writing = false;       // already writing mutex
+    this.compacting = false;    // repacking file
     this.writestring = '';
     this.writePendingCount = 0;
     this.writeDoneCount = 0;
@@ -235,7 +236,7 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
         else if (!timer) timer = (maxWaitMs > 0) ? setTimeout(doProcessBatch, maxWaitMs) : (process.nextTick(doProcessBatch), true);
     }
 
-    // grab the items in the batch so far, and process them after an optional delay
+    // grab the items in the batch so far, and process them
     function doProcessBatch() {
         clearTimeout(timer);
         timer = null;
@@ -259,6 +260,52 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
             })
         })
     }
+}
+
+/*
+ * in-place compact the fifo to free up unused space
+ * TODO: change to copy data to a new file, then rename the new to overwrite the old
+ */
+QFifo.prototype.compact = function compact( options, callback ) {
+    if (typeof options === 'function') { callback = options; options = {} }
+    var minSize = options.minSize || 1e6;
+    var minReadRatio = options.minReadRatio || 0.67; // NOTE: ratio < 0.5 is not error-safe, copy overlaps data
+    var self = this;
+    self.open(function(err) {
+        if (err) return callback(err);
+        fs.stat(self.filename, function(err, stats) {
+            if (err || stats.size < minSize || self.position / stats.size < minReadRatio) return callback(err);
+            // TODO: mutex reading/writing against compacting too
+            self.compacting = true;
+            self.copyBytes(self.fd, self.fd, self.position, Infinity, 0, allocBuf(self.options.readSize), function(err) {
+                if (err) return callback(err);
+                self.seekoffset -= self.position;
+                self.position = 0;
+                self.compacting = false;
+                self.rsync(callback);
+            })
+        })
+    })
+}
+
+/*
+ * copy the bytes from srcFd between srcOffset and srcLimit into dstFd to offset dstOffset
+ * TODO: see if can combine this loop with _readsome and _writesome
+ */
+QFifo.prototype.copyBytes = function copyBytes( srcFd, dstFd, srcOffset, srcLimit, dstOffset, buff, callback ) {
+    (function readWriteLoop() {
+        var nchunk = Math.min(buff.length, srcLimit - srcOffset);
+        fs.read(srcFd, buff, 0, nchunk, srcOffset, function(err, nread) {
+            if (err) return callback(err);
+            srcOffset += nread;
+            fs.write(dstFd, buff, 0, nread, dstOffset, function(err, nwritten) {
+                if (err) return callback(err);
+                dstOffset += nwritten;
+                if (nwritten < nchunk) fs.truncate(dstFd, dstOffset, function(err) { return callback(err, dstOffset) });
+                else readWriteLoop();
+            })
+        })
+    })();
 }
 
 /*
