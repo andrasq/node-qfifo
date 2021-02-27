@@ -843,12 +843,12 @@ module.exports = {
                 })
             },
             'returns error if unable to rename header': function(t) {
-                this.wfifo.headername = '/etc/motd';
+                this.wfifo.headername = '/home';
                 this.wfifo.rename('/tmp/test-qfifo-new', function(err) {
                     // t.equal(err && err.code, 'EEXIST');  // getting EXDEV, but could also be EISDIR or EACCESS
                     fs.unlinkSync('/tmp/test-qfifo-new');
                     t.ok(err);
-                    t.contains(err.message, /\/etc\/motd/, "error message contains headername");
+                    t.contains(err.message, /\/home/, "error message contains headername");
                     t.done();
                 })
             },
