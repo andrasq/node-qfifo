@@ -22,6 +22,7 @@ var ftruncateName = eval('fs.ftruncate ? "ftruncate" : "truncate"');
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 var CH_NL = '\n'.charCodeAt(0);
+var CH_SP = ' '.charCodeAt(0);
 
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
@@ -56,6 +57,7 @@ function QFifo( filename, options ) {
     this.readstringoffset = 0;
     this.readlinesPaused = false;
     this.readlinesLoop = function(){};
+    this.lastReadTime = 0;
 
     // TODO: move this into Writer()
     this.writing = false;       // already writing mutex
@@ -86,6 +88,7 @@ QFifo.prototype.open = function open( callback ) {
         fs.readFile(self.headername, function(err2, header) {
             try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
             self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : 0;
+            self.lastReadTime = header.rtime || 0;
             self.eof = self._eof = false;
             self.error = null;
             self._runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
@@ -127,7 +130,7 @@ QFifo.prototype.flush = function flush( callback ) {
 
 // checkpoint the read header
 QFifo.prototype.rsync = function rsync( callback ) {
-    var header = { position: this.position };
+    var header = { position: this.position, rtime: this.lastReadTime };
     try { writeHeaderSync(this.headername, JSON.stringify(header)); callback() } catch (e) { callback(e) }
 }
 
@@ -184,6 +187,7 @@ QFifo.prototype._readsome = function _readsome( ) {
             self._eof = (!(nbytes === self.readbuf.length));
             var wasEmpty = !self.readstring;
             self.readstring += self.decoder.write(self.readbuf.slice(0, nbytes));
+            self.lastReadTime = Date.now();
             // if first read into empty buffer, read ahead next chunk
             if (wasEmpty && nbytes) { self.reading = true; self.open(readchunk) }
             // if readlines is active, deliver the lines from this chunk
@@ -267,7 +271,6 @@ QFifo.prototype.batchCalls = function batchCalls( options, processBatchFunc ) {
 
 /*
  * in-place compact the fifo to free up unused space
- * TODO: change to copy data to a new file, then rename the new to overwrite the old
  */
 QFifo.prototype.compact = function compact( options, callback ) {
     if (typeof options === 'function') { callback = options; options = {} }
@@ -389,7 +392,7 @@ function writeHeaderSync( filename, contents ) {
     try { var fd = fs.openSync(filename, 'r+') } catch (e) { var fd = fs.openSync(filename, 'w') }
     var buf = allocBuf(200);
     var n = buf.write(contents);
-    for ( ; n < buf.length; n++) buf[n] = 0x20;
+    for ( ; n < buf.length; n++) buf[n] = CH_SP;
     return fs.writeSync(fd, buf, 0, buf.length, null);
 }
 

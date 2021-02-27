@@ -207,13 +207,16 @@ module.exports = {
             var tempfile = this.tempfile;
             var rfifo = this.rfifo;
             fs.writeFileSync(tempfile, 'line1\nline22\nline333\n');
+            var now = Date.now();
             rfifo.getline();
             setTimeout(function() {
                 t.equal(rfifo.getline(), 'line1\n');
                 t.equal(rfifo.getline(), 'line22\n');
                 rfifo.rsync(function(err, ret) {
                     t.ifError(err);
-                    t.contains(String(fs.readFileSync(tempfile + '.hd')), '"position":13');
+                    var header = JSON.parse(fs.readFileSync(tempfile + '.hd'));
+                    t.contains(header, { position: 13 });
+                    t.ok(header.rtime >= now);
                     t.done();
                 })
             }, 5);
