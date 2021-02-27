@@ -683,6 +683,84 @@ module.exports = {
             },
         },
 
+        'compact': {
+            'compacts file': function(t) {
+                var fifo = this.rfifo;
+                fs.writeFileSync(fifo.filename, 'line1\nline22\nline333\nline4444\n');
+                runSteps([
+                    function(next) {
+                        fifo.getline();
+                        setTimeout(next, 5);
+                    },
+                    function(next) {
+                        t.equal(fifo.getline(), 'line1\n');
+                        t.equal(fifo.getline(), 'line22\n');
+                        fifo.rsync(next);
+                    },
+                    function(next) {
+                        // will not compact if too small
+                        fifo.compact(next);
+                    },
+                    function(next) {
+                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line1\nline22\nline333\nline4444\n');
+                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: 13 });
+                        next();
+                    },
+                    function(next) {
+                        // copy in tiny steps to also test chunk tiling
+                        fifo.compact({ minSize: 0, minReadRatio: 0, readSize: 4 }, next);
+                    },
+                    function(next) {
+                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line333\nline4444\n');
+                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: 0 });
+                        next();
+                    },
+                ], t.done);
+            },
+
+            'edge cases': {
+                'returns open error': function(t) {
+                    t.stubOnce(this.rfifo, 'open').yields('mock open error');
+                    this.rfifo.compact({ minSize: 0, minReadRatio: 0 }, function(err) {
+                        t.equal(err, 'mock open error');
+                        t.done();
+                    })
+                },
+                'returns copyBytes error': function(t) {
+                    t.stubOnce(this.rfifo, 'copyBytes').yields('mock copy error');
+                    this.rfifo.compact({ minSize: 0, minReadRatio: 0 }, function(err) {
+                        t.equal(err, 'mock copy error');
+                        t.done();
+                    })
+                },
+                'returns ftruncate error': function(t) {
+                    t.stubOnce(fs, fs.ftruncate ? 'ftruncate' : 'truncate').yields('mock ftruncate error');
+                    this.rfifo.compact({ minSize: 0, minReadRatio: 0 }, function(err) {
+                        t.equal(err, 'mock ftruncate error');
+                        t.done();
+                    })
+                },
+                'returns copyBytes read error': function(t) {
+                    t.stubOnce(fs, 'read').yields('mock read error');
+                    this.rfifo.compact({ minSize: 0, minReadRatio: 0 }, function(err) {
+                        t.equal(err, 'mock read error');
+                        t.done();
+                    })
+                },
+                'returns copyBytes write error': function(t) {
+                    t.stubOnce(fs, 'write').yields('mock write error');
+                    this.rfifo.compact({ minSize: 0, minReadRatio: 0 }, function(err) {
+                        t.equal(err, 'mock write error');
+                        t.done();
+                    })
+                },
+            },
+        },
+
+        'copyBytes': {
+            // TODO: WRITEME
+        },
+
         'remove': {
             'unlinks the fifo file': function(t) {
                 var filename = this.wfifo.filename;
@@ -768,6 +846,7 @@ module.exports = {
                 this.wfifo.headername = '/etc/motd';
                 this.wfifo.rename('/tmp/test-qfifo-new', function(err) {
                     // t.equal(err && err.code, 'EEXIST');  // getting EXDEV, but could also be EISDIR or EACCESS
+                    fs.unlinkSync('/tmp/test-qfifo-new');
                     t.ok(err);
                     t.contains(err.message, /\/etc\/motd/, "error message contains headername");
                     t.done();
