@@ -15,7 +15,10 @@ var sd = require('string_decoder');
 
 module.exports = QFifo;
 
+// setImmediate new in node-v0.9
 var setImmediate = eval('global.setImmediate || process.nextTick');
+// node-v0.8.6 renamed truncate to ftruncate(2) and added new truncate(2)
+var ftruncateName = eval('fs.ftruncate ? "ftruncate" : "truncate"');
 var allocBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.allocUnsafe : Buffer');
 var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer');
 var CH_NL = '\n'.charCodeAt(0);
@@ -268,8 +271,9 @@ QFifo.prototype.batchCalls = function batchCalls( options, processBatchFunc ) {
  */
 QFifo.prototype.compact = function compact( options, callback ) {
     if (typeof options === 'function') { callback = options; options = {} }
-    var minSize = options.minSize || 1e6;
-    var minReadRatio = options.minReadRatio || 0.67; // NOTE: ratio < 0.5 is not error-safe, copy overlaps data
+    var minSize = options.minSize >= 0 ? options.minSize : 1e6;
+    var minReadRatio = options.minReadRatio >= 0 ? options.minReadRatio : 0.667; // NB!: ratio < 0.5 copy overlaps data
+    var readSize = options.readSize > 0 ? options.readSize : this.options.readSize;
     var self = this;
     self.open(function(err) {
         if (err) return callback(err);
@@ -277,12 +281,16 @@ QFifo.prototype.compact = function compact( options, callback ) {
             if (err || stats.size < minSize || self.position / stats.size < minReadRatio) return callback(err);
             // TODO: mutex reading/writing against compacting too
             self.compacting = true;
-            self.copyBytes(self.fd, self.fd, self.position, Infinity, 0, allocBuf(self.options.readSize), function(err) {
-                if (err) return callback(err);
-                self.seekoffset -= self.position;
-                self.position = 0;
-                self.compacting = false;
-                self.rsync(callback);
+            var buf = allocBuf(readSize);
+            self.copyBytes(self.fd, self.fd, self.position, Infinity, 0, buf, function(err, endPosition) {
+                if (err) { self.compacting = false; return callback(err) }
+                fs[ftruncateName](self.fd, endPosition, function(err) {
+                    if (err) { self.compacting = false; return callback(err) }
+                    self.seekoffset -= self.position;
+                    self.position = 0;
+                    self.compacting = false;
+                    self.rsync(callback);
+                })
             })
         })
     })
@@ -301,7 +309,7 @@ QFifo.prototype.copyBytes = function copyBytes( srcFd, dstFd, srcOffset, srcLimi
             fs.write(dstFd, buff, 0, nread, dstOffset, function(err, nwritten) {
                 if (err) return callback(err);
                 dstOffset += nwritten;
-                if (nwritten < nchunk) fs.truncate(dstFd, dstOffset, function(err) { return callback(err, dstOffset) });
+                if (nwritten < nchunk) callback(null, dstOffset);
                 else readWriteLoop();
             })
         })

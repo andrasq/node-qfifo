@@ -6,7 +6,7 @@
   "author": "andrasq",
   "main": "qfifo.js",
   "files": ["README.md", "qfifo.js"],
-  "engines": { "node": ">= 0.7" },
+  "engines": { "node": ">= 0.6" },
   "readme": "see README.md",
   "repository": { "type": "git", "url": "git://github.com/andrasq/node-qfifo" },
 

@@ -132,6 +132,11 @@ Copy the unread portion of the fifo to the start of the file.  This call assumes
 lines read have been successfully handled, and checkpoints the current read position, ie
 implicitly does an rsync.  The fifo should not be read or written until this call completes.
 
+Options:
+- `minSize` only compact if file has grown to this many bytes, default 1 million
+- `minReadRatio` only compact if this fraction of the file has been read, default 2/3
+- `readSize` copy in chunks of this many bytes, default fifo `options.readSize` (64K)
+
 ### fifo.copyBytes( srcFd, dstFd, srcOffset, srcLimit, dstOffset, buff, callback(err, nbytes) )
 
 Copy the data bytes read from the file descriptor `srcFd` from between `srcOffset` and
