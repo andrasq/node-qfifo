@@ -214,8 +214,8 @@ QFifo.prototype._writesome = function _writesome( ) {
     }
 }
 
-QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
-    options = options || {};
+QFifo.prototype.batchCalls = function batchCalls( options, processBatchFunc ) {
+    if (!processBatchFunc) { processBatchFunc = options; options = {} }
     var maxWaitMs = options.maxWaitMs >= 0 ? options.maxWaitMs : 0;
     var maxBatchSize = options.maxBatchSize >= 1 ? options.maxBatchSize : 10;
     var startBatch = typeof options.startBatch === 'function' ? options.startBatch : null;
@@ -227,7 +227,7 @@ QFifo.prototype.batchCalls = function batchCalls( processBatchFunc, options ) {
 
     return function processItem(item, cb) {
         // add the item to the current batch
-        growBatch ? growBatch(batch, item) : batch.push(item);
+        growBatch ? (batch = growBatch(batch, item)) : batch.push(item);
         cb && batchCbs.push(cb);
         itemCount += 1;
         // process the batch when the batch size and/or wait time are reached

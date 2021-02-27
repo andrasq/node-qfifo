@@ -218,7 +218,7 @@ Todo
 Changelog
 ----------------
 
-- 0.6.0 - `rename` method, `remove` method, `compact` method
+- 0.6.0 - `rename` method, `remove` method, `compact` method, move batchCalls options to front
 - 0.5.0 - `matchFiles` method, experimental `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper
 - 0.3.0 - `readlines/pause/resume` methods, `updatePosition` option for faster reading, set `eof`

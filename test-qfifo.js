@@ -623,54 +623,63 @@ module.exports = {
         },
 
         'batchCalls': {
-            'returns a function that calls its callback': function(t) {
-                var uut = new QFifo('fn');
-                var cbCount = 0;
-                var batchCount = 0;
-                var fn = uut.batchCalls(function(batch, cb) { batchCount += 1; cb() });
-                t.equal(typeof fn, 'function');
-                for (var i = 0; i < 997; i++) fn(i, function() { cbCount += 1 });
-                setTimeout(function() {
-                    t.equal(batchCount, Math.ceil(997 / 10));
-                    t.equal(cbCount, 997);
+            'calls processBatchFunc with item list': function(t) {
+                var uut = new QFifo('mockfile');
+                var fn = uut.batchCalls(function processBatchFunc(list, cb) {
+                    t.deepEqual(list, [1, 2, 3]);
                     t.done();
                 })
+                fn(1);
+                fn(2);
+                fn(3);
             },
-
-            'batches into groups of maxBatchSize': function(t) {
-                var uut = new QFifo('fn');
-                var batches = [];
-                var ndone = 0;
-                var func = uut.batchCalls(function(batch, cb) { batches.push(batch); cb() }, { maxBatchSize: 4 });
-                for (var i = 0; i < 10; i++) func(i);
-                setTimeout(function() {
-                    t.deepEqual(batches, [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]);
-                    t.done();
+            'invokes each callback': function(t) {
+                var uut = new QFifo('mockfile');
+                var fn = uut.batchCalls(function(list, cb) {
+                    cb();
                 })
+                var cbs = [];
+                fn(1, function(){ cbs.push(11) });
+                fn(2, function(){ cbs.push(22) });
+                fn(3, function(){ cbs.push(33); t.deepEqual(cbs, [11, 22, 33]); t.done() });
             },
-
-            'uses custom batching function and specified delay': function(t) {
-                var uut = new QFifo('fn');
-                var batch = [];
-                var firstCbTime = null;
-                var lastCbTime = null;
-                var fn = uut.batchCalls(function(batch, cb) { cb() }, {
-                    maxWaitMs: 10,
-                    maxBatchSize: 4,
-                    startBatch: function(max) { return batch },
-                    growBatch: function(bb, item) { t.equal(bb, batch); batch.push(item) },
-                });
+            'waits maxWaitMs before processing': function(t) {
+                var uut = new QFifo('mockfile');
                 var startTime = Date.now();
-                for (var i = 0; i < 5; i++) fn(i, function(){ firstCbTime = firstCbTime || Date.now(); lastCbTime = Date.now() });
-                setTimeout(function() {
-                    // first batch reaches maxBatchSize and is processed immediately
-                    t.ok(firstCbTime >= startTime);
-                    // second batch waits 10 ms before being processed
-                    t.ok(lastCbTime >= startTime + 10 - 1);
-                    // each separate callback should have been called in order
-                    t.deepEqual(batch, [0, 1, 2, 3, 4]);
-                    t.done();
-                }, 30);
+                var fn = uut.batchCalls({ maxWaitMs: 7 }, function(list, cb) {
+                    var now = Date.now();
+                    t.ok(now >= startTime + 7 - 1);
+                    cb();
+                })
+                fn(1, t.done);
+            },
+            'gathers at most maxBatchSize before processing': function(t) {
+                var uut = new QFifo('mockfile');
+                var expectBatches = [[1, 2], [3, 4], [5]];
+                var fn = uut.batchCalls({ maxBatchSize: 2 }, function(list, cb) {
+                    t.deepEqual(list, expectBatches.shift());
+                    if (!expectBatches.length) t.done();
+                })
+                fn(1);
+                fn(2);
+                fn(3);
+                fn(4);
+                fn(5);
+            },
+            'uses custom startBatch and growBatch functions': function(t) {
+                var uut = new QFifo('mockfile');
+                var expectBatches = ['ab', 'c'];
+                var fn = uut.batchCalls({
+                    maxBatchSize: 2,
+                    startBatch: function() { return '' },
+                    growBatch: function(batch, item) { return batch + item },
+                }, function(batch, cb) {
+                    t.equal(batch, expectBatches.shift());
+                    if (!expectBatches.length) t.done();
+                })
+                fn('a');
+                fn('b');
+                fn('c');
             },
         },
 
