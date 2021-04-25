@@ -1,6 +1,6 @@
 {
   "name": "qfifo",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "quick file-based fifo to buffer newline terminate string data",
   "license": "Apache-2.0",
   "author": "andrasq",

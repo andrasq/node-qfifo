@@ -160,17 +160,17 @@ QFifo.prototype.readlines = function readlines( visitor ) {
     var self = this, line;
     (function loop() {
         self.readlinesLoop = loop;
+
         // read-ahead next chunk while delivering lines from this one
         if (!self.readlinesPaused) self._readsome();
         while (!self.readlinesPaused && (line = self.getline())) visitor(line);
+
         // if no more lines but not eof yet _readsome will restart loop,
-        // if eof hit, arrange to restart loop when file is appended
-        if (self.eof && !self.readlinesPaused) {
-            var watcher = _tryWatch(self.filename, function() {
-                watcher.close();
-                self._readsome();
-            })
-        }
+        // if eof hit or file not yet exists, arrange to restart loop when file is appended
+        var watcher = (!self.readlinesPaused) && _tryWatch(self.filename, function() {
+            watcher.close();
+            self._readsome();
+        })
     })();
 }
 function _tryWatch(file, cb) { try { return fs.watch(file, cb) } catch (err) { } }

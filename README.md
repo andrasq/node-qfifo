@@ -212,11 +212,9 @@ Todo
 ----------------
 
 - `preopen` option
-- make `r`-mode `open` run `_getmore` and wait for results before returning
+- make `r`-mode `open` run `_getmore` to prefetch and wait for results before returning
 - allow for streaming Buffers straight to file
 - maybe queue pending writes and have _writesome() write the queued parts
-- `clear()` call to discard contents and remove .hd
-- `compact()` call to quick-copy repack the fifo contents
 - optional `concurrent` true/false batchCalls config setting (default true)
 
 
