@@ -211,9 +211,7 @@ QFifo.prototype._writesome = function _writesome( ) {
             if (err) self.error = err; // and continue, to error out the pending callbacks
             else if (nbytes > 0) self.eof = self._eof = false;
             self.writeDoneCount += nchars;
-            while (self.flushCbs.length && (self.flushCbs[0].awaitCount <= self.writeDoneCount || self.error)) {
-                self.flushCbs.shift().cb(self.error);
-            }
+            if (self.flushCbs.length) self._runFlushCallbacks();
             if (self.writeDoneCount === self.writePendingCount) self.writeDoneCount = self.writePendingCount = 0;
             if (self.writestring) self.open(writechunk); // keep writing if more data arrived
             else self.writing = false;
@@ -221,10 +219,9 @@ QFifo.prototype._writesome = function _writesome( ) {
     }
 }
 QFifo.prototype._runFlushCallbacks = function _doFlush( ) {
-    var cbs = this.flushCbs;
-    this.flushCbs = new Array();
-    for (var i = 0; i < cbs.length; i++) {
-        if (cbs[i].awaitCount <= this.writeDoneCount || this.error) cbs[i].cb(this.error);
+    // TODO: would be faster to swap arrays than to shift, but code depends on this construct
+    while (this.flushCbs.length && (this.flushCbs[0].awaitCount <= this.writeDoneCount || this.error)) {
+        this.flushCbs.shift().cb(this.error);
     }
 }
 
