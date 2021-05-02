@@ -203,7 +203,7 @@ QFifo.prototype._writesome = function _writesome( ) {
     var self = this;
     this.writing ? 'arlready writing, only one at a time' : (this.writing = true, this.open(writechunk));
     function writechunk() {
-        if (self.error) { self.writing = false; return }
+        if (self.error) { self.writing = false; self._runFlushCallbacks(); return }
         var nchars = self.writestring.length, writebuf = fromBuf(self.writestring);
         self.writestring = '';
         // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
@@ -218,6 +218,13 @@ QFifo.prototype._writesome = function _writesome( ) {
             if (self.writestring) self.open(writechunk); // keep writing if more data arrived
             else self.writing = false;
         })
+    }
+}
+QFifo.prototype._runFlushCallbacks = function _doFlush( ) {
+    var cbs = this.flushCbs;
+    this.flushCbs = new Array();
+    for (var i = 0; i < cbs.length; i++) {
+        if (cbs[i].awaitCount <= this.writeDoneCount || this.error) cbs[i].cb(this.error);
     }
 }
 
