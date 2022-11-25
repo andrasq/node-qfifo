@@ -9,7 +9,7 @@ var fs = require('fs');
 var QFifo = require('./');
 
 var setImmediate = eval('global.setImmediate || process.nextTick');
-var fromBuf = Buffer.from ? Buffer.from : Buffer;
+var fromBuf = process.versions.node >= 6 && Buffer.from ? Buffer.from : Buffer;
 
 module.exports = {
     beforeEach: function(done) {
