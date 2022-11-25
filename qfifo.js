@@ -281,6 +281,7 @@ QFifo.prototype.compact = function compact( options, callback ) {
     var minSize = options.minSize >= 0 ? options.minSize : 1e6;
     var minReadRatio = options.minReadRatio >= 0 ? options.minReadRatio : 0.667; // NB!: ratio < 0.5 copy overlaps data
     var readSize = options.readSize > 0 ? options.readSize : this.options.readSize;
+    var dstOffset = options.dstPosition || 0;
     var self = this;
     self.open(function(err) {
         if (err) return callback(err);
@@ -289,9 +290,10 @@ QFifo.prototype.compact = function compact( options, callback ) {
             // TODO: mutex reading/writing against compacting too
             self.compacting = true;
             var buf = allocBuf(readSize);
-            self.copyBytes(self.fd, self.fd, self.position, Infinity, 0, buf, function(err, endPosition) {
+            self.copyBytes(self.fd, self.fd, self.position, Infinity, dstOffset, buf, function(err, endPosition) {
                 if (err) { self.compacting = false; return callback(err) }
                 fs[ftruncateName](self.fd, endPosition, function(err) {
+                    // TODO: make compact() reusable, move this section into the caller
                     if (err) { self.compacting = false; return callback(err) }
                     self.seekoffset -= self.position;
                     self.position = 0;

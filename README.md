@@ -136,6 +136,7 @@ Options:
 - `minSize` only compact if file has grown to this many bytes, default 1 million
 - `minReadRatio` only compact if this fraction of the file has been read, default 2/3
 - `readSize` copy in chunks of this many bytes, default fifo `options.readSize` (64K)
+- `dstOffset` how many bytes to leave without overwriting at the start of the file
 
 ### fifo.copyBytes( srcFd, dstFd, srcOffset, srcLimit, dstOffset, buff, callback(err, nbytes) )
 
