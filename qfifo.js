@@ -97,9 +97,10 @@ QFifo.prototype.open = function open( callback ) {
 }
 QFifo.prototype._runCallbacks = function _runCallbacks( cbs, err, ret ) { while (cbs.length) cbs.shift()(err, ret); }
 
-QFifo.prototype.close = function close( ) {
-    if (this.fd >= 0) try { fs.closeSync(this.fd) } catch (e) { console.error(e) }
+QFifo.prototype.close = function close( callback ) {
+    if (this.fd >= 0) try { fs.closeSync(this.fd) } catch (e) { var err = e; console.error(e) }
     this.fd = -1;
+    if (callback) callback(err);
 }
 
 QFifo.prototype.putline = function putline( str ) {

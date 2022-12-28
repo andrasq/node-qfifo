@@ -200,6 +200,46 @@ module.exports = {
                 t.done();
             })
         },
+
+        'calls optional callback': function(t) {
+            var fifo = this.rfifo;
+            t.stubOnce(fs, 'closeSync', function() { throw 'mock error' });
+            fifo.open(function() {
+                fifo.close(function(err) {
+                    t.equal(err, 'mock error');
+                    t.done();
+                })
+            })
+        },
+
+        'closes fds': function(t) {
+            var fifo = this.wfifo;
+            var spy = t.spy(fs, 'closeSync');
+            runSteps([
+                function(next) {
+                    // auto-open on first write
+                    fifo.putline('line1');
+                    fifo.putline('line2');
+                    fifo.flush(next);
+                },
+                function(next) {
+                    fifo.rsync(next);
+                },
+                function(next) {
+                    t.ok(fifo.fd >= 0);
+                    // t.ok(fifo.headerfd >= 0);
+                    fifo.close(next);
+                }
+            ], function(err) {
+                spy.restore();
+                t.ifError(err);
+                t.ok(spy.called);
+                // t.equal(spy.callCount, 2);
+                t.equal(fifo.fd, -1);
+                // t.equal(fifo.headerfd, -1);
+                t.done();
+            })
+        },
     },
 
     'rsync / fflush': {
