@@ -1,7 +1,7 @@
 /*
  * qfifo -- quick file-based fifo to buffer newline terminated data
  *
- * Copyright (C) 2020-2021 Andras Radics
+ * Copyright (C) 2020-2022 Andras Radics
  * Licensed under the Apache License, Version 2.0
  *
  * 2020-12-20 - AR.
@@ -308,6 +308,7 @@ QFifo.prototype.compact = function compact( options, callback ) {
 /*
  * copy the bytes from srcFd between srcOffset and srcLimit into dstFd to offset dstOffset
  * TODO: see if can combine this loop with _readsome and _writesome
+ * nb: it is ok to read and write 0 bytes
  */
 QFifo.prototype.copyBytes = function copyBytes( srcFd, dstFd, srcOffset, srcLimit, dstOffset, buff, callback ) {
     (function readWriteLoop() {

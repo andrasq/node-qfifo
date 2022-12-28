@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Andras Radics
+ * Copyright (C) 2020-2022 Andras Radics
  * Licensed under the Apache License, Version 2.0
  */
 
@@ -9,7 +9,7 @@ var fs = require('fs');
 var QFifo = require('./');
 
 var setImmediate = eval('global.setImmediate || process.nextTick');
-var fromBuf = process.versions.node >= 6 && Buffer.from ? Buffer.from : Buffer;
+var fromBuf = (parseInt(process.versions.node) >= 6 && Buffer.from) ? Buffer.from : Buffer;
 
 module.exports = {
     beforeEach: function(done) {
@@ -719,6 +719,18 @@ module.exports = {
                         next();
                     },
                 ], t.done);
+            },
+
+            'compacts an empty file': function(t) {
+                var fifo = this.rfifo;
+                var spy = t.spyOnce(fs, 'write');
+                fifo.compact({ minSize: 0, minReadRatio: 0 }, function(err, dstOffset) {
+                    t.ifError(err);
+                    t.ok(spy.called);
+                    t.equal(spy.args[0][0], fifo.fd);
+                    t.equal(spy.args[0][3], 0);
+                    t.done();
+                })
             },
 
             'edge cases': {

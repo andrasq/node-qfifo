@@ -24,7 +24,8 @@ efficiently feed the ingest process that consumes it.
 
 - QFifos are inherently single-reader, the consuming process owns the fifo.
 - Single-writer; concurrent writes are not supported. (File locking is missing from nodejs, so
-  this incarnation differs from the quicklib version it was based on.)
+  this incarnation differs from the
+  [quicklib](https://github.com/andrasq/quicklib/) version it was based on.)
 
 
 Api
