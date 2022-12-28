@@ -41,6 +41,7 @@ function QFifo( filename, options ) {
     this.filename = filename;
     this.headername = filename + '.hd';
     this.fd = -1;
+    this.headerfd = -1;
     this.reopenTime = -1;
 
     this.eof = false;           // no more lines until more written
@@ -99,7 +100,9 @@ QFifo.prototype._runCallbacks = function _runCallbacks( cbs, err, ret ) { while 
 
 QFifo.prototype.close = function close( callback ) {
     if (this.fd >= 0) try { fs.closeSync(this.fd) } catch (e) { var err = e; console.error(e) }
+    if (this.headerfd >= 0) try { fs.closeSync(this.headerfd) } catch (e) { err = e; console.error(e) }
     this.fd = -1;
+    this.headerfd = -1;
     if (callback) callback(err);
 }
 
@@ -131,8 +134,10 @@ QFifo.prototype.flush = function flush( callback ) {
 
 // checkpoint the read header
 QFifo.prototype.rsync = function rsync( callback ) {
+    // var fd = (this.headerfd >= 0) ? this.headerfd : (this.headerfd = this.fastOpen(this.headername));
+    try { var fd = fs.openSync(this.headername, 'r+') } catch (e) { var fd = fs.openSync(this.headername, 'w+') }
     var header = { position: this.position, rtime: this.lastReadTime };
-    try { writeHeaderSync(this.headername, JSON.stringify(header)); callback() } catch (e) { callback(e) }
+    try { writeHeaderSync(fd, JSON.stringify(header), this.readbuf); callback() } catch (e) { callback(e) }
 }
 
 // tracking readstringoffset idea borrowed from qfgets
@@ -395,13 +400,14 @@ QFifo.prototype.matchFiles = function matchFiles( dirname, matchRegex, callback 
     })
 }
 
-// 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+'
-function writeHeaderSync( filename, contents ) {
-    try { var fd = fs.openSync(filename, 'r+') } catch (e) { var fd = fs.openSync(filename, 'w') }
-    var buf = allocBuf(200);
+var spaces200 =
+    '                                                                                                    ' +
+    '                                                                                                    ';
+// 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+', 1.2 us if fd already open
+function writeHeaderSync( fd, contents, buf ) {
     var n = buf.write(contents);
-    for ( ; n < buf.length; n++) buf[n] = CH_SP;
-    return fs.writeSync(fd, buf, 0, buf.length, null);
+    buf.write(spaces200, n, 200 - n);
+    return fs.writeSync(fd, buf, 0, 200, 0);
 }
 
 // aliases

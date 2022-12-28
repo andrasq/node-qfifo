@@ -236,7 +236,7 @@ module.exports = {
                 t.ok(spy.called);
                 // t.equal(spy.callCount, 2);
                 t.equal(fifo.fd, -1);
-                // t.equal(fifo.headerfd, -1);
+                t.equal(fifo.headerfd, -1);
                 t.done();
             })
         },
@@ -1045,6 +1045,21 @@ module.exports = {
                         eofSeen = true;
                     }
                 })
+            })
+        },
+
+        'rsync 100k': function(t) {
+            var fifo = this.rfifo;
+            console.time('AR: rsync 10k');
+            var ndone = 0;
+            for (var i=0; i<100000; i++) this.rfifo.rsync(function(){
+                ndone += 1;
+                if (ndone >= 100000) {
+                    console.timeEnd('AR: rsync 10k');
+                    var contents = fs.readFileSync(fifo.headername).toString();
+                    t.equal(contents.trim(), '{"position":0,"rtime":0}');
+                    t.done();
+                }
             })
         },
     },
