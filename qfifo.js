@@ -106,7 +106,8 @@ QFifo.prototype.open = function open( callback ) {
             self.lastReadTime = header.rtime || 0;
             self.eof = self._eof = false;
             self.error = null;
-            whenOpen();
+            // leave space for an in-file header if fifo is completely empty
+            (self.dataOffset > 0 && self.options.flag[0] === 'a') ? self.skipDataOffset(whenOpen) : whenOpen();
         })
         function whenOpen(err3) {
             if (err3) { self.close(); self.error = err3; self.eof = self._eof = true }
@@ -439,6 +440,16 @@ QFifo.prototype.readHeaderFile = function readHeaderFile( filename, readbuf, hea
     fs.read(fd, readbuf, 0, headerSize, 0, function(err, nread) {
         fs.closeSync(fd);
         callback(err, !err && readbuf.slice(0, nread));
+    })
+}
+// pad an empty fifo with dataOffset blanks at the front to leave room for the in-file header
+QFifo.prototype.skipDataOffset = function skipDataOffset( callback ) {
+    var self = this;
+    fs.stat(self.filename, function(err, stats) {
+        if (err || stats.size > 0) return callback(err);
+        self.readbuf.write(spaces200);
+        // NOTE: max header size is 200 bytes
+        fs.write(self.fd, self.readbuf, 0, self.dataOffset, null, callback);
     })
 }
 

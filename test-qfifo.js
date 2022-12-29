@@ -14,8 +14,8 @@ var fromBuf = (parseInt(process.versions.node) >= 6 && Buffer.from) ? Buffer.fro
 module.exports = {
     beforeEach: function(done) {
         this.tempfile = '/tmp/test-qfifo-' + process.pid + '.txt';
-        var rfifo = this.rfifo = new QFifo(this.tempfile, 'r+');
-        var wfifo = this.wfifo = new QFifo(this.tempfile, 'a+');
+        this.rfifo = new QFifo(this.tempfile, 'r+');
+        this.wfifo = new QFifo(this.tempfile, 'a+');
         // pre-create the file else read fifos error out on open
         fs.writeFileSync(this.tempfile, "");
         done();
@@ -51,6 +51,7 @@ module.exports = {
 
     'can open and read files': function(t) {
         var fifo = new QFifo(__filename);
+        fifo.dataOffset = 0;
         fifo.open(function(err, fd) {
             t.ifError(err);
             var line, lines = [];
@@ -66,6 +67,7 @@ module.exports = {
     'open': {
         'fifos auto-open on read': function(t) {
             var fifo = new QFifo(__filename, 'r');
+            fifo.dataOffset = 0;
             fifo.getline();
             setTimeout(function() {
                 t.equal(fifo.getline(), fs.readFileSync(__filename).toString().split('\n')[0] + '\n');
@@ -79,9 +81,23 @@ module.exports = {
             fifo.putline('line1');
             fifo.putline('line2');
             setTimeout(function() {
-                t.equal(fs.readFileSync(tempfile), 'line1\nline2\n');
+                t.equal(readFifoSync(fifo), 'line1\nline2\n');
                 t.done();
             }, 5);
+        },
+
+        'pads the file to leave room for the header': function(t) {
+            var fifo = new QFifo(this.tempfile, { flag: 'a', headerName: this.tempfile });
+            t.equal(fifo.dataOffset, 200); // default headerSize
+            fifo.open(function(err, fd) {
+                t.ifError(err);
+                fifo.putline('line123');
+                setTimeout(function() {
+                    var contents = fs.readFileSync(fifo.filename).toString();
+                    t.equal(Buffer.byteLength(contents), fifo.dataOffset + 8);
+                    t.done();
+                }, 5);
+            })
         },
 
         'open reads the fifo header': function(t) {
@@ -89,7 +105,7 @@ module.exports = {
             fs.writeFileSync(fifo.headername, JSON.stringify({ skip: 100, position: 123 }));
             var spy = t.spyOnce(fifo, 'readHeaderFile');
             fifo.open(function(err, fd) {
-                t.ifError();
+                t.ifError(err);
                 t.ok(spy.called);
                 t.equal(spy.args[0][0], fifo.headername);
                 t.equal(fifo.dataOffset, 100);
@@ -100,10 +116,10 @@ module.exports = {
 
         'open tolerates invalid json fifo header': function(t) {
             var fifo = new QFifo(__filename);
-            var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, '{]');
+            var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, '{ invalid json }');
             fifo.open(function(err, fd) {
                 t.ifError(err);
-                t.equal(fifo.position, 0);
+                t.equal(fifo.position, fifo.dataOffset);
                 fifo.close();
                 t.done();
             })
@@ -114,14 +130,15 @@ module.exports = {
             var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, 'null');
             fifo.open(function(err, fd) {
                 t.ifError(err);
-                t.equal(fifo.position, 0);
+                t.equal(fifo.position, fifo.dataOffset);
                 fifo.close();
                 t.done();
             })
         },
 
         'open extracts read offset from header and applies it': function(t) {
-            var fifo = new QFifo(__filename);
+            var fifo = new QFifo(__filename, { headerName: this.tempfile + '.hd' });
+            fifo.dataOffset = 0;
             var lines = fs.readFileSync(__filename).toString()
                 .split('\n').slice(0, 10)
                 .map(function(line) { return line + '\n' });
@@ -143,12 +160,22 @@ module.exports = {
             })
         },
 
-        'open returns error and sets fd to -1': function(t) {
+        'open returns data file error and sets fd to -1': function(t) {
             var fifo = new QFifo('/nonesuch');
             t.equal(fifo.fd, -1);
             fifo.open(function(err, fd) {
                 t.equal(err.code, 'ENOENT');
                 t.equal(fd, -1);
+                t.equal(fifo.fd, -1);
+                t.done();
+            })
+        },
+
+        'open returns header error and sets fd to -1': function(t) {
+            var fifo = new QFifo(this.tempfile);
+            t.stubOnce(fifo, 'readHeaderFile').yields('mock header error');
+            fifo.open(function(err, fd) {
+                t.equal(err, 'mock header error');
                 t.equal(fifo.fd, -1);
                 t.done();
             })
@@ -246,7 +273,7 @@ module.exports = {
         'rsync checkpoints the fifo header': function(t) {
             var tempfile = this.tempfile;
             var rfifo = this.rfifo;
-            fs.writeFileSync(tempfile, 'line1\nline22\nline333\n');
+            writeFifoSync(rfifo, 'line1\nline22\nline333\n');
             var now = Date.now();
             rfifo.getline();
             setTimeout(function() {
@@ -255,7 +282,7 @@ module.exports = {
                 rfifo.rsync(function(err, ret) {
                     t.ifError(err);
                     var header = JSON.parse(fs.readFileSync(tempfile + '.hd'));
-                    t.contains(header, { position: 13 });
+                    t.contains(header, { position: rfifo.dataOffset + 13 });
                     t.ok(header.rtime >= now);
                     t.done();
                 })
@@ -277,11 +304,11 @@ module.exports = {
             wfifo.putline('line22');
             wfifo.fflush(function(err) {
                 t.ifError(err);
-                t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\n');
+                t.equal(readFifoSync(wfifo) + '', 'line1\nline22\nline333\n');
                 wfifo.putline('line4444');
                 wfifo.fflush(function(err) {
                     t.ifError(err);
-                    t.equal(fs.readFileSync(tempfile) + '', 'line1\nline22\nline333\nline4444\n');
+                    t.equal(readFifoSync(wfifo) + '', 'line1\nline22\nline333\nline4444\n');
                     t.done();
                 })
             })
@@ -448,9 +475,9 @@ module.exports = {
                 setTimeout(function() {
                     // read back the written data
                     t.equal(fifo.getline(), 'line1\n');
-                    t.equal(fifo.position, 6);
+                    t.equal(fifo.position, fifo.dataOffset + 6);
                     t.equal(fifo.getline(), 'line22\n');
-                    t.equal(fifo.position, 13);
+                    t.equal(fifo.position, fifo.dataOffset + 13);
                     // end of data, read more to detect the eof
                     t.equal(fifo.getline(), '');
                     t.equal(fifo.reading, true);
@@ -500,20 +527,20 @@ module.exports = {
 
         'does not update position if updatePosition:false': function(t) {
             var fifo = new QFifo(this.tempfile, { flag: 'a+', updatePosition: false });
-            t.equal(fifo.position, 0);
+            t.equal(fifo.position, fifo.dataOffset + 0);
             fifo.write('line1\nline22\nline333\n');
             fifo.fflush(function(err) {
                 t.ifError(err);
                 fifo.getline();
                 setTimeout(function() {
                     t.equal(fifo.getline(), 'line1\n');
-                    t.equal(fifo.position, 0);
+                    t.equal(fifo.position, fifo.dataOffset + 0);
                     t.equal(fifo.getline(), 'line22\n');
-                    t.equal(fifo.position, 0);
+                    t.equal(fifo.position, fifo.dataOffset + 0);
                     t.equal(fifo.getline(), 'line333\n');
-                    t.equal(fifo.position, 0);
+                    t.equal(fifo.position, fifo.dataOffset + 0);
                     t.equal(fifo.getline(), '');
-                    t.equal(fifo.position, 0);
+                    t.equal(fifo.position, fifo.dataOffset + 0);
                     t.done();
                 }, 5)
             })
@@ -523,6 +550,7 @@ module.exports = {
     'readlines': {
         'reads file in chunks': function(t) {
             var fifo = new QFifo(__filename, { readSize: 20 });
+            fifo.dataOffset = 0;
             var lines = '';
             fifo.readlines(function(line) {
                 t.ok(line[line.length - 1] === '\n');
@@ -537,6 +565,7 @@ module.exports = {
 
         'does not deliver lines until resumed': function(t) {
             var fifo = new QFifo(__filename);
+            fifo.dataOffset = 0;
             var now = Date.now();
             fifo.pause();
             fifo.readlines(function(line) {
@@ -549,6 +578,7 @@ module.exports = {
 
         'can pause/resume': function(t) {
             var fifo = new QFifo('package.json');
+            fifo.dataOffset = 0;
             var lineTimes = [];
             fifo.readlines(function(line) {
                 lineTimes.push(Date.now());
@@ -729,7 +759,7 @@ module.exports = {
         'compact': {
             'compacts file': function(t) {
                 var fifo = this.rfifo;
-                fs.writeFileSync(fifo.filename, 'line1\nline22\nline333\nline4444\n');
+                writeFifoSync(fifo, 'line1\nline22\nline333\nline4444\n');
                 runSteps([
                     function(next) {
                         fifo.getline();
@@ -745,8 +775,8 @@ module.exports = {
                         fifo.compact(next);
                     },
                     function(next) {
-                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line1\nline22\nline333\nline4444\n');
-                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: 13 });
+                        t.equal(readFifoSync(fifo).toString(), 'line1\nline22\nline333\nline4444\n');
+                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: fifo.dataOffset + 13 });
                         next();
                     },
                     function(next) {
@@ -754,8 +784,8 @@ module.exports = {
                         fifo.compact({ minSize: 0, minReadRatio: 0, readSize: 4 }, next);
                     },
                     function(next) {
-                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line333\nline4444\n');
-                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: 0 });
+                        t.equal(readFifoSync(fifo).toString(), 'line333\nline4444\n');
+                        t.contains(JSON.parse(fs.readFileSync(fifo.headername).toString()), { position: fifo.dataOffset + 0 });
                         next();
                     },
                 ], t.done);
@@ -819,7 +849,7 @@ module.exports = {
         'remove': {
             'unlinks the fifo file': function(t) {
                 var filename = this.wfifo.filename;
-                fs.writeFileSync(filename, 'line1\n');
+                writeFifoSync(this.wfifo, 'line1\n');
                 this.wfifo.remove(function(err) {
                     fs.readFile(filename, function(err, bytes) {
                         t.equal(err && err.code, 'ENOENT');
@@ -866,7 +896,7 @@ module.exports = {
                         t.ifError(err);
                         t.equal(fifo.filename, tempfile + '.0');
                         t.equal(fifo.headername, tempfile + '.0.hd');
-                        t.equal(fs.readFileSync(fifo.filename).toString(), 'line1\n');
+                        t.equal(readFifoSync(fifo).toString(), 'line1\n');
                         fs.unlinkSync(tempfile + '.0');
                         t.done();
                     })
@@ -1138,11 +1168,20 @@ function writeall( fifo, lines, cb ) {
     })();
 }
 
+function writeFifoSync( fifo, lines ) {
+    var offsetPad = new Array(fifo.dataOffset + 1).join(' ');
+    fs.writeFileSync(fifo.filename, offsetPad + lines);
+}
+
+function readFifoSync( fifo ) {
+    return fs.readFileSync(fifo.filename).toString().slice(fifo.dataOffset);
+}
+
 // iterateSteps adapted from minisql from miniq, originally from qrepeat and aflow
 function runSteps(steps, callback) {
     var ix = 0;
     (function _loop(err, a1, a2) {
         if (err || ix >= steps.length) return callback(err, a1, a2);
-        steps[ix++](_loop, a1, a2);
+        try { steps[ix++](_loop, a1, a2) } catch (err) { _loop(err) }
     })()
 }
