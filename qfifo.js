@@ -24,6 +24,8 @@ var fromBuf = eval('parseInt(process.versions.node) >= 6 ? Buffer.from : Buffer'
 var CH_NL = '\n'.charCodeAt(0);
 var CH_SP = ' '.charCodeAt(0);
 
+var HEADER_SIZE = QFifo.HEADER_SIZE = 200;
+
 function QFifo( filename, options ) {
     if (typeof options !== 'object') options = { flag: options };
     this.options = {
@@ -49,12 +51,13 @@ function QFifo( filename, options ) {
     this.reopenTime = -1;
     this.hasheader = this.filename === this.headername;
 
-    var dataOffset = this.hasheader ? 200 : 0;
+    var dataOffset = this.hasheader ? HEADER_SIZE : 0;
 
     this.eof = false;                   // no more lines until more written
     this.error = null;                  // read error, bad file
     this.dataOffset = dataOffset;       // offset in fifo of data lines after any embedded header
     this.position = this.dataOffset;    // byte offset of next line to be read
+    this.writepos = this.dataOffset;    // byte offset of next line to be written
 
     // TODO: move this into Reader()
     this._eof = false;          // short read, file eof
@@ -93,22 +96,28 @@ QFifo.prototype.open = function open( callback ) {
     if (this.fd >= 0 || this.error) return callback(this.error, this.fd);
     this.openCbs.push(callback);
     if (this.fd === -1) this.fd = -2; else return; // mutex the openers
-    fs.open(this.filename, this.options.flag, function(err, fd) {
+    this.openFifoFile(this.filename, this.options.flag, function(err, fd, size) {
         self.fd = err ? -1 : fd;
         if (err) return whenOpen(err);
         if (self.options.reopenInterval > 0) self.reopenTime = Date.now() + self.options.reopenInterval;
         if (reopenOnly) return whenOpen();
-        var headerSize = self.hasheader ? self.dataOffset : 200;
+        self.writepos = Math.max(self.dataOffset, size); // by default write fifo at the end
+        var headerSize = self.hasheader ? self.dataOffset : HEADER_SIZE;
         self.readHeaderFile(self.headername, self.readbuf, headerSize, function(err2, header) {
             if (err2 && err2.code !== 'ENOENT') return whenOpen(err2);
             try { header = !err2 && JSON.parse(header) || {} } catch (e) { var header = {} }
+            if (header.skip > HEADER_SIZE) return whenOpen(
+                new Error(self.dataOffset + ': header too long, max ' + HEADER_SIZE));
             self.dataOffset = header.skip >= 0 ? Number(header.skip) : self.dataOffset;
             self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : self.dataOffset;
+            self.writepos = header.wpos >= 0 ? Number(header.wpos) : self.writepos;
             self.lastReadTime = header.rtime || 0;
             self.eof = self._eof = false;
             self.error = null;
-            // leave space for an in-file header if fifo is completely empty
-            (self.dataOffset > 0 && self.options.flag[0] === 'a') ? self.skipDataOffset(whenOpen) : whenOpen();
+            // pad with enough spaces for an in-file header if fifo is completely empty
+            // needed for linux 'a' mode, which always appends at end and cannot seek to writepos
+            if (self.dataOffset > size && self.options.flag[0] === 'a') self.skipDataOffset(self.dataOffset - size, whenOpen);
+            else whenOpen();
         })
         function whenOpen(err3) {
             if (err3) { self.close(); self.error = err3; self.eof = self._eof = true }
@@ -165,8 +174,9 @@ QFifo.prototype.rsync = function rsync( callback ) {
     if (this.hasheader && this.options.flag === 'r+' && this.fd >= 0) var fd = this.fd;
     else try { fd = fs.openSync(this.headername, 'r+') } catch (e) { fd = fs.openSync(this.headername, 'w+') }
 
-    var header = '{"v":0,"skip":' + this.dataOffset + ',"position":' + this.position + ',"rtime":' + this.lastReadTime + '}';
-    var headerSize = this.hasheader ? this.dataOffset : 200;
+    var header = '{"v":0,"skip":' + this.dataOffset + ',"position":' + this.position + ',"wpos":' + this.writepos +
+        ',"rtime":' + this.lastReadTime + '}';
+    var headerSize = this.hasheader ? this.dataOffset : HEADER_SIZE;
     try { this.writeHeaderSync(fd, header, this.readbuf, headerSize); callback() } catch (e) { callback(e) }
 }
 
@@ -244,9 +254,9 @@ QFifo.prototype._writesome = function _writesome( ) {
         var nchars = self.writestring.length, writebuf = fromBuf(self.writestring);
         self.writestring = '';
         // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
-        fs.write(self.fd, writebuf, 0, writebuf.length, null, function(err, nbytes) {
+        fs.write(self.fd, writebuf, 0, writebuf.length, self.writepos, function(err, nbytes) {
             if (err) self.error = err; // and continue, to error out the pending callbacks
-            else if (nbytes > 0) self.eof = self._eof = false;
+            else if (nbytes > 0) { self.eof = self._eof = false; self.writepos += nbytes }
             self.writeDoneCount += nchars;
             if (self.flushCbs.length) self._runFlushCallbacks();
             if (!self.flushCbs.length && self.writeDoneCount === self.writePendingCount) {
@@ -339,6 +349,7 @@ QFifo.prototype.compact = function compact( options, callback ) {
                     if (err) { self.compacting = false; return callback(err) }
                     self.seekoffset -= self.position;
                     self.position = self.dataOffset;
+                    self.writepos = endPosition;
                     self.compacting = false;
                     self.rsync(callback);
                 })
@@ -444,6 +455,7 @@ var spaces200 =
 // nb: faster to poke spaces into buffer singly than to buf.write chunks of 40 bytes
 QFifo.prototype.writeHeaderSync = function writeHeaderSync( fd, contents, buf, headerSize ) {
     var n = buf.write(contents);
+    // NOTE: max header size is 200 bytes (HEADER_SIZE)
     buf.write(spaces200, n, headerSize - n);
     buf[headerSize - 1] = CH_NL; // newline terminate the header json to separate it from any data lines
     return fs.writeSync(fd, buf, 0, headerSize, 0);
@@ -456,13 +468,22 @@ QFifo.prototype.readHeaderFile = function readHeaderFile( filename, readbuf, hea
     })
 }
 // pad an empty fifo with dataOffset blanks at the front to leave room for the in-file header
-QFifo.prototype.skipDataOffset = function skipDataOffset( callback ) {
+QFifo.prototype.skipDataOffset = function skipDataOffset( nbytes, callback ) {
+    var self = this, buf = this.readbuf;
+    // NOTE: max header size is 200 bytes (HEADER_SIZE)
+    // if (nbytes > 200) return callback(new Error('header too long, only 200 bytes supported'));
+    self.readbuf.write(spaces200, 0, nbytes);
+    self.readbuf[nbytes - 1] = CH_NL;
+    fs.write(self.fd, self.readbuf, 0, nbytes, null, callback);
+}
+// open the file and return the fd and file size
+QFifo.prototype.openFifoFile = function openFifoFile( filename, mode, callback ) {
     var self = this;
-    fs.stat(self.filename, function(err, stats) {
-        if (err || stats.size > 0) return callback(err);
-        self.readbuf.write(spaces200);
-        // NOTE: max header size is 200 bytes
-        fs.write(self.fd, self.readbuf, 0, self.dataOffset, null, callback);
+    fs.open(filename, mode, function(err, fd) {
+        fs.stat(filename, function(err2, stats) {
+            if (err || err2) return callback(err || err2);
+            callback(null, fd, stats.size);
+        })
     })
 }
 
