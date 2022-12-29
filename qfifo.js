@@ -94,19 +94,24 @@ QFifo.prototype.open = function open( callback ) {
     if (this.fd === -1) this.fd = -2; else return; // mutex the openers
     fs.open(this.filename, this.options.flag, function(err, fd) {
         self.fd = err ? -1 : fd;
-        if (err) { self.error = err; self.eof = self._eof = true; self._runCallbacks(self.openCbs, err, self.fd); return }
+        if (err) return whenOpen(err);
         if (self.options.reopenInterval > 0) self.reopenTime = Date.now() + self.options.reopenInterval;
-        if (reopenOnly) return self._runCallbacks(self.openCbs, err, self.fd);
+        if (reopenOnly) return whenOpen();
         var headerSize = self.hasheader ? self.dataOffset : 200;
         self.readHeaderFile(self.headername, self.readbuf, headerSize, function(err2, header) {
+            if (err2 && err2.code !== 'ENOENT') return whenOpen(err2);
             try { header = !err2 && JSON.parse(header) || {} } catch (e) { var header = {} }
             self.dataOffset = header.skip >= 0 ? Number(header.skip) : self.dataOffset;
             self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : self.dataOffset;
             self.lastReadTime = header.rtime || 0;
             self.eof = self._eof = false;
             self.error = null;
-            self._runCallbacks(self.openCbs, err, self.fd); // call all the open callbacks
+            whenOpen();
         })
+        function whenOpen(err3) {
+            if (err3) { self.close(); self.error = err3; self.eof = self._eof = true }
+            self._runCallbacks(self.openCbs, err3, self.fd); // notify all callers that the fifo is open
+        }
     })
 }
 QFifo.prototype._runCallbacks = function _runCallbacks( cbs, err, ret ) { while (cbs.length) cbs.shift()(err, ret); }
