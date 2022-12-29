@@ -83,7 +83,7 @@ module.exports = {
             setTimeout(function() {
                 t.equal(readFifoSync(fifo), 'line1\nline2\n');
                 t.done();
-            }, 5);
+            }, fifo.options.writeDelay + 3);
         },
 
         'pads the file to leave room for the header': function(t) {
@@ -96,7 +96,7 @@ module.exports = {
                     var contents = fs.readFileSync(fifo.filename).toString();
                     t.equal(Buffer.byteLength(contents), fifo.dataOffset + 8);
                     t.done();
-                }, 5);
+                }, fifo.options.writeDelay + 3);
             })
         },
 
@@ -497,7 +497,7 @@ module.exports = {
                                 // t.equal(fifo.eof, false);
                                 t.done();
                             }, 5)
-                        }, 5)
+                        }, fifo.options.writeDelay + 3)
                     }, 5)
                 }, 5)
             })
@@ -515,7 +515,7 @@ module.exports = {
                     t.deepEqual(lines, ['line-1\n', 'line-2\n', 'line-3\n']);
                     t.done();
                 })
-            }, 10);
+            }, wfifo.options.writeDelay + 8);
         },
 
         'can fflush an empty fifo': function(t) {
@@ -667,7 +667,7 @@ module.exports = {
                 fifo._writesome();
                 t.equal(fifo.writing, true);
                 setTimeout(function() {
-                    t.equal(fifo.writing, false);
+                    t.equal(fifo.writing, false); // writing again false once write completed
                     t.done();
                 }, 5);
             },
@@ -684,11 +684,10 @@ module.exports = {
             'does not write if fifo.error is set': function(t) {
                 var fifo = this.wfifo;
                 fifo.error = 'mock-write-error';
-                var spy = t.spy(fs, 'write');
+                var spy = t.spyOnce(fs, 'write');
                 fifo._writesome();
                 t.equal(fifo.writing, false);
                 setTimeout(function() {
-                    spy.restore();
                     t.equal(spy.called, false);
                     t.done();
                 }, 5);
@@ -1114,7 +1113,7 @@ module.exports = {
                                 t.equal(nlines, 100001);
                                 t.equal(lastLine, 'one more line to test fs.watch\n');
                                 t.done();
-                            }, 10);
+                            }, fifo.options.writeDelay + 8);
                             fifo.putline('one more line to test fs.watch\n');
                         }
                         eofSeen = true;
