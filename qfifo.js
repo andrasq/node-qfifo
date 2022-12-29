@@ -143,10 +143,15 @@ QFifo.prototype.write = function write( str ) {
 }
 
 // push the written data to the file
+// fflush opens the fifo concurrently with _writesome, hence the guard with open()
+// (matters when padding an empty append-fifo to dataOffset)
 QFifo.prototype.flush = function flush( callback ) {
-    if (this.error) callback(this.error);
-    else if (this.writeDoneCount >= this.writePendingCount) callback();
-    else this.flushCbs.push({ awaitCount: this.writePendingCount, cb: callback });
+    var self = this;
+    this.open(function(err) {
+        if (self.error) callback(self.error);
+        else if (self.writeDoneCount >= self.writePendingCount) callback();
+        else self.flushCbs.push({ awaitCount: self.writePendingCount, cb: callback });
+    })
 }
 
 // checkpoint the read header
