@@ -86,18 +86,21 @@ module.exports = {
 
         'open reads the fifo header': function(t) {
             var fifo = new QFifo(this.tempfile);
-            var spy = t.spyOnce(fs, 'readFile');
+            fs.writeFileSync(fifo.headername, JSON.stringify({ skip: 100, position: 123 }));
+            var spy = t.spyOnce(fifo, 'readHeaderFile');
             fifo.open(function(err, fd) {
                 t.ifError();
                 t.ok(spy.called);
                 t.equal(spy.args[0][0], fifo.headername);
+                t.equal(fifo.dataOffset, 100);
+                t.equal(fifo.position, 123);
                 t.done();
             })
         },
 
         'open tolerates invalid json fifo header': function(t) {
             var fifo = new QFifo(__filename);
-            var spy = t.stubOnce(fs, 'readFile').yields(null, '{]');
+            var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, '{]');
             fifo.open(function(err, fd) {
                 t.ifError(err);
                 t.equal(fifo.position, 0);
@@ -108,7 +111,7 @@ module.exports = {
 
         'open tolerates null json fifo header': function(t) {
             var fifo = new QFifo(__filename);
-            var spy = t.stubOnce(fs, 'readFile').yields(null, 'null');
+            var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, 'null');
             fifo.open(function(err, fd) {
                 t.ifError(err);
                 t.equal(fifo.position, 0);
@@ -122,7 +125,7 @@ module.exports = {
             var lines = fs.readFileSync(__filename).toString()
                 .split('\n').slice(0, 10)
                 .map(function(line) { return line + '\n' });
-            var spy = t.stubOnce(fs, 'readFile').yields(null, '{"position":' + (lines[0].length + lines[1].length) + '}');
+            var spy = t.stubOnce(fifo, 'readHeaderFile').yields(null, '{"position":' + (lines[0].length + lines[1].length) + '}');
             fifo.open(function(err, fd) {
                 t.ifError(err);
                 t.equal(fifo.position, lines[0].length + lines[1].length);
@@ -227,16 +230,13 @@ module.exports = {
                 },
                 function(next) {
                     t.ok(fifo.fd >= 0);
-                    // t.ok(fifo.headerfd >= 0);
                     fifo.close(next);
                 }
             ], function(err) {
                 spy.restore();
                 t.ifError(err);
                 t.ok(spy.called);
-                // t.equal(spy.callCount, 2);
                 t.equal(fifo.fd, -1);
-                t.equal(fifo.headerfd, -1);
                 t.done();
             })
         },
@@ -958,6 +958,49 @@ module.exports = {
         },
     },
 
+    'end-to-end': {
+        'supports arbitrary dataOffset': function(t) {
+            var headerLine = '{"skip":80}                                                                    \n';
+            var fifo = new QFifo(this.tempfile, { flag: 'a+', headerName: this.tempfile });
+            fs.writeFileSync(this.tempfile, headerLine);
+            runSteps([
+                function(next) {
+                    fifo.open(next);
+                },
+                function(next) {
+                    t.equal(fifo.dataOffset, 80);
+                    fifo.putline('line1');
+                    fifo.putline('line22');
+                    fifo.flush(next);
+                },
+                function(next) {
+                    var lines = fs.readFileSync(fifo.headername).toString().trim().split('\n');
+                    t.deepEqual(lines.slice(1), ['line1', 'line22']);
+                    t.equal(lines[0], headerLine.slice(0, -1));
+                    fifo.getline();
+                    setTimeout(next, 5);
+                },
+                function(next) {
+                    fifo.getline();
+                    t.equal(fifo.position, fifo.dataOffset + 6);
+                    fifo.rsync(next);
+                },
+                function(next) {
+                    next();
+                },
+            ], function(err) {
+                t.ifError(err);
+                var now = Date.now();
+                var lines = fs.readFileSync(fifo.headername).toString().trim().split('\n');
+                t.deepEqual(lines.slice(1), ['line1', 'line22']);
+                var header = JSON.parse(lines[0]);
+                t.contains(header, { skip: 80, position: 80 + 6 });
+                t.ok(header.rtime > now - 100 && header.rtime <= now);
+                t.done();
+            })
+        },
+    },
+
     'speed': {
         'write 1m lines': function(t) {
             var fifo = new QFifo(this.tempfile, 'a');
@@ -1034,14 +1077,16 @@ module.exports = {
                     lastLine = line;
                     nlines += 1;
                     if (fifo.eof) {
-                        if (!eofSeen) console.timeEnd("AR: readlines 200B x100k");
-                        // about 6.7m/s 200b lines (9.8/s w/o updatePosition)
-                        setTimeout(function() {
-                            t.equal(nlines, 100001);
-                            t.equal(lastLine, 'one more line to test fs.watch\n');
-                            t.done();
-                        }, 10);
-                        if (!eofSeen) fifo.putline('one more line to test fs.watch\n');
+                        if (!eofSeen) {
+                            console.timeEnd("AR: readlines 200B x100k");
+                            // about 6.7m/s 200b lines (9.8/s w/o updatePosition)
+                            setTimeout(function() {
+                                t.equal(nlines, 100001);
+                                t.equal(lastLine, 'one more line to test fs.watch\n');
+                                t.done();
+                            }, 10);
+                            fifo.putline('one more line to test fs.watch\n');
+                        }
                         eofSeen = true;
                     }
                 })
@@ -1049,17 +1094,21 @@ module.exports = {
         },
 
         'rsync 100k': function(t) {
-            var fifo = this.rfifo;
-            console.time('AR: rsync 10k');
+            fs.writeFileSync(this.tempfile, "");
+            var fifo = new QFifo(this.tempfile, { flag: 'r+', headerName: this.tempfile });
+            console.time('AR: rsync 100k');
             var ndone = 0;
-            for (var i=0; i<100000; i++) this.rfifo.rsync(function(){
-                ndone += 1;
-                if (ndone >= 100000) {
-                    console.timeEnd('AR: rsync 10k');
-                    var contents = fs.readFileSync(fifo.headername).toString();
-                    t.equal(contents.trim(), '{"position":0,"rtime":0}');
-                    t.done();
-                }
+            fifo.open(function() {
+                for (var i=0; i<100000; i++) fifo.rsync(function(){
+                    ndone += 1;
+                    if (ndone >= 100000) {
+                        console.timeEnd('AR: rsync 100k');
+                        var contents = fs.readFileSync(fifo.headername).toString().split('\n')[0];
+                        t.equal(contents.length, 199);
+                        t.contains(JSON.parse(contents), { position: fifo.dataOffset, rtime: 0 });
+                        t.done();
+                    }
+                })
             })
         },
     },

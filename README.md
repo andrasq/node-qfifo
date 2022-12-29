@@ -218,6 +218,7 @@ Todo
 - allow for streaming Buffers straight to file
 - maybe queue pending writes and have _writesome() write the queued parts
 - optional `concurrent` true/false batchCalls config setting (default true)
+- harvest idle file descriptors whose reopenTime has expired
 
 
 Changelog

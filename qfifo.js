@@ -33,25 +33,32 @@ function QFifo( filename, options ) {
         writeDelay:     getOption(options, 'writeDelay', 'number', 2),
         reopenInterval: getOption(options, 'reopenInterval', 'number', 20),
         updatePosition: getOption(options, 'updatePosition', 'boolean', true),
+        headerName:     getOption(options, 'headerName', 'string', ''),
     };
     if (!filename) throw new Error('missing filename');
+
+    // all reading is done by explicit read offset, all writing by appending, hence only modes r, r+, a, a+
+    // because of this, however, in-place header updates only possible in r+ mode
     var flag = this.options.flag;
     if (flag[0] !== 'r' && flag[0] !== 'a') throw new Error(flag + ": bad open mode, expected 'r' or 'a'");
 
     this.filename = filename;
-    this.headername = filename + '.hd';
+    this.headername = this.options.headerName || filename + '.hd';
     this.fd = -1;
-    this.headerfd = -1;
     this.reopenTime = -1;
+    this.hasheader = this.filename === this.headername;
 
-    this.eof = false;           // no more lines until more written
-    this.error = null;          // read error, bad file
-    this.position = 0;          // byte offset of next line to be read
+    var dataOffset = this.hasheader ? 200 : 0;
+
+    this.eof = false;                   // no more lines until more written
+    this.error = null;                  // read error, bad file
+    this.dataOffset = dataOffset;       // offset in fifo of data lines after any embedded header
+    this.position = this.dataOffset;    // byte offset of next line to be read
 
     // TODO: move this into Reader()
     this._eof = false;          // short read, file eof
     this.reading = false;       // already reading mutex
-    this.readbuf = allocBuf(this.options.readSize);
+    this.readbuf = allocBuf(Math.max(this.options.readSize, this.dataOffset));
     this.decoder = new sd.StringDecoder();
     this.seekoffset = this.position;
     this.readstring = '';
@@ -71,10 +78,14 @@ function QFifo( filename, options ) {
     this.queuedWrite = null;
 }
 function getOption(opts, name, type, _default) {
-    return typeof opts[name] === type ? opts[name] : opts[name] === undefined ? _default : throwError();
+    return typeof opts[name] === type ? opts[name] : typeof opts[name] === 'undefined' ? _default : throwError();
     function throwError() { throw new Error(name + ': must be ' + type) }
 }
 
+/*
+ * Open the fifo for access.
+ * This call also implements reopenInterval, so the returned file descriptor is always fresh.
+ */
 QFifo.prototype.open = function open( callback ) {
     var self = this, reopenOnly;
     if (this.fd >= 0 && this.reopenTime > 0 && new Date() > this.reopenTime) { reopenOnly = true; this.close() }
@@ -86,9 +97,11 @@ QFifo.prototype.open = function open( callback ) {
         if (err) { self.error = err; self.eof = self._eof = true; self._runCallbacks(self.openCbs, err, self.fd); return }
         if (self.options.reopenInterval > 0) self.reopenTime = Date.now() + self.options.reopenInterval;
         if (reopenOnly) return self._runCallbacks(self.openCbs, err, self.fd);
-        fs.readFile(self.headername, function(err2, header) {
-            try { var header = !err2 && JSON.parse(String(header)) || {} } catch (e) { var header = { position: 0 } }
-            self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : 0;
+        var headerSize = self.hasheader ? self.dataOffset : 200;
+        self.readHeaderFile(self.headername, self.readbuf, headerSize, function(err2, header) {
+            try { header = !err2 && JSON.parse(header) || {} } catch (e) { var header = {} }
+            self.dataOffset = header.skip >= 0 ? Number(header.skip) : self.dataOffset;
+            self.position = self.seekoffset = header.position >= 0 ? Number(header.position) : self.dataOffset;
             self.lastReadTime = header.rtime || 0;
             self.eof = self._eof = false;
             self.error = null;
@@ -100,9 +113,7 @@ QFifo.prototype._runCallbacks = function _runCallbacks( cbs, err, ret ) { while 
 
 QFifo.prototype.close = function close( callback ) {
     if (this.fd >= 0) try { fs.closeSync(this.fd) } catch (e) { var err = e; console.error(e) }
-    if (this.headerfd >= 0) try { fs.closeSync(this.headerfd) } catch (e) { err = e; console.error(e) }
     this.fd = -1;
-    this.headerfd = -1;
     if (callback) callback(err);
 }
 
@@ -133,11 +144,17 @@ QFifo.prototype.flush = function flush( callback ) {
 }
 
 // checkpoint the read header
+// 70% faster to open r+ when possible rather than w+
+// 25% faster to build the json string by hand than to stringify an object
+// note: rsync() is synchronous, so can use the already open fd (else would need to guard with this.open())
 QFifo.prototype.rsync = function rsync( callback ) {
-    // var fd = (this.headerfd >= 0) ? this.headerfd : (this.headerfd = this.fastOpen(this.headername));
-    try { var fd = fs.openSync(this.headername, 'r+') } catch (e) { var fd = fs.openSync(this.headername, 'w+') }
-    var header = { position: this.position, rtime: this.lastReadTime };
-    try { writeHeaderSync(fd, JSON.stringify(header), this.readbuf); callback() } catch (e) { callback(e) }
+    // can update contained r+ mode fifo headers via fifo fd, but cannot seek on a+ mode append-only fifos
+    if (this.hasheader && this.options.flag === 'r+' && this.fd >= 0) var fd = this.fd;
+    else try { fd = fs.openSync(this.headername, 'r+') } catch (e) { fd = fs.openSync(this.headername, 'w+') }
+
+    var header = '{"v":0,"skip":' + this.dataOffset + ',"position":' + this.position + ',"rtime":' + this.lastReadTime + '}';
+    var headerSize = this.hasheader ? this.dataOffset : 200;
+    try { this.writeHeaderSync(fd, header, this.readbuf, headerSize); callback() } catch (e) { callback(e) }
 }
 
 // tracking readstringoffset idea borrowed from qfgets
@@ -287,7 +304,7 @@ QFifo.prototype.compact = function compact( options, callback ) {
     var minSize = options.minSize >= 0 ? options.minSize : 1e6;
     var minReadRatio = options.minReadRatio >= 0 ? options.minReadRatio : 0.667; // NB!: ratio < 0.5 copy overlaps data
     var readSize = options.readSize > 0 ? options.readSize : this.options.readSize;
-    var dstOffset = options.dstPosition || 0;
+    var dstOffset = options.dstPosition || this.dataOffset;
     var self = this;
     self.open(function(err) {
         if (err) return callback(err);
@@ -302,7 +319,7 @@ QFifo.prototype.compact = function compact( options, callback ) {
                     // TODO: make compact() reusable, move this section into the caller
                     if (err) { self.compacting = false; return callback(err) }
                     self.seekoffset -= self.position;
-                    self.position = 0;
+                    self.position = self.dataOffset;
                     self.compacting = false;
                     self.rsync(callback);
                 })
@@ -403,11 +420,21 @@ QFifo.prototype.matchFiles = function matchFiles( dirname, matchRegex, callback 
 var spaces200 =
     '                                                                                                    ' +
     '                                                                                                    ';
-// 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+', 1.2 us if fd already open
-function writeHeaderSync( fd, contents, buf ) {
+// 43 usec fs.writeFile 200B async, 7.3 usec all sync, 4.3 usec if sync opened 'r+', 1.5 us if fd already open,
+// 1.1 us if smarter about json encoding
+// nb: faster to poke spaces into buffer singly than to buf.write chunks of 40 bytes
+QFifo.prototype.writeHeaderSync = function writeHeaderSync( fd, contents, buf, headerSize ) {
     var n = buf.write(contents);
-    buf.write(spaces200, n, 200 - n);
-    return fs.writeSync(fd, buf, 0, 200, 0);
+    buf.write(spaces200, n, headerSize - n);
+    buf[headerSize - 1] = CH_NL; // newline terminate the header json to separate it from any data lines
+    return fs.writeSync(fd, buf, 0, headerSize, 0);
+}
+QFifo.prototype.readHeaderFile = function readHeaderFile( filename, readbuf, headerSize, callback ) {
+    try { var fd = fs.openSync(filename, 'r') } catch (err) { return callback(err) }
+    fs.read(fd, readbuf, 0, headerSize, 0, function(err, nread) {
+        fs.closeSync(fd);
+        callback(err, !err && readbuf.slice(0, nread));
+    })
 }
 
 // aliases
