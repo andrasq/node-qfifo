@@ -31,23 +31,36 @@ efficiently feed the ingest process that consumes it.
 Api
 ----------------
 
-### fifo = new QFifo( filename, options )
+### fifo = new QFifo( filename, modeOrOptions )
 
-Create a fifo for reading or appending the named file.  Mode should be `'r+'` or `'a+'` to
-control whether the file will be treated if missing: `r+` read mode to error out if the file
-does not already exist, `a+` append mode to create the file if missing.  All fifos can both read
-and write; for read-only or append-only access, omit the `+` from the flag.  Creating a new
-QFifo is a fast, it only allocates the object; the fifo must still be `open`-ed (but note
-that `getline`, `putline` and `readlines` automatically open the fifo).
+Create a fifo for reading or appending the named fifo file.
+
+Fifos operate in _read mode_ or _append mode_.  In `'a'` append-only mode and `'a+'` read-write
+mode fifos are always written to at the end, with missing fifos created; in `'r'` read mode it
+is an error if the fifo does not already exist.  The `'r+'` mode is accepted as a performance
+optimization (see _Options_ below), but should not be used for writing.  For exclusive read-only
+or append-only access, omit the `+` from the mode flag.
+
+_NOTE_:  Reading fifos is always safe; writing `'r+'` read-mode fifos is currently not supported.
+For now (as of version 0.7.0) always write fifos in `'a'` or `'a+'` append mode to ensure that
+data is not overwritten.
+
+Creating a new QFifo is a fast, it only allocates the object and initializes state; the filesystem
+is only accessed on `open` (but note that `getline`, `putline` and `readlines` automatically open
+the fifo).
 
 Options may contain the following settings:
-- `flag`: open mode flag for `fs.open()`, default `'r'`.
+- `flag`: open mode flag for `fs.open()`, default `'r'`.  The flag may be `'r'` for read-only,
+  `'a'` for append-only, or `'a+'` for read-write.  `'r+'` is allowed as an optimization for
+  faster in-file header rsyncs, but should not be used for data writes.
 - `readSize`: how many bytes to read at a time, default 64K.
-- `writeSize`: TBD
-- `writeDelay`: TBD
+- `writeSize`: how many pending chars trigger an immediate write instead of waiting `writeDelay` ms,
+  default 16K.  Set to `0` zero to always write immediately.
+- `writeDelay`: write-combining optimization, how many ms to wait for more data to arrive before
+  writing to file, default `2` ms.
 - `updatePosition`: whether to update `fifo.position` with the byte offset in the file of the
   next line to be read.  Default `true`.  `position` is needed to checkpoint the read state, but
-  omitting it is 25% faster.
+  omitting it is 25% faster (for e.g. when the whole file is consumed without checkpointing).
 - `reopenInterval`: how frequently to reopen the fifo file, -1 never.  Default every 20 ms
   to ensure that writes will cease after a rename.
 
@@ -58,10 +71,12 @@ The fifo has no lines yet after the open, reading is started by the first `getli
 It is safe to open the fifo more than once, the duplicate calls are harmless.  Note that
 `getline` and `putline` will open the file if it hasn't been already.
 
-### fifo.close( )
+### fifo.close( [callback(err)] )
 
-Close the file descriptor.  The fifo will not be usable until it is reopened.  Closing the fifo
-while still writing will produce a write error; sync first with `flush()`.
+Close the file descriptor.  The fifo will not be usable until it is reopened.  Close is not
+synchronized with reads/writes, closing the fifo while still in use will produce and error.  Sync
+data with `flush()` and/or read state with `rsync()` first.  If a `callback` is provided it will
+be invoked once the files are closed.
 
 ### line = fifo.getline( )
 
@@ -224,7 +239,8 @@ Todo
 Changelog
 ----------------
 
-- 0.7.0 - fixes, optional callback to close
+- 0.7.0 - fixes, optional callback to `close`, experimental support for in-file headers,
+          much faster rsync for `r+` mode fifos
 - 0.6.0 - `rename` method, `remove` method, `compact` method, move batchCalls options to front
 - 0.5.0 - `matchFiles` method, experimental `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper

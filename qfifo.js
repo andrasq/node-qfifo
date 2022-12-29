@@ -37,8 +37,9 @@ function QFifo( filename, options ) {
     };
     if (!filename) throw new Error('missing filename');
 
-    // all reading is done by explicit read offset, all writing by appending, hence only modes r, r+, a, a+
-    // because of this, however, in-place header updates only possible in r+ mode
+    // all reading is done by explicit read offset, all writing at the current write point, hence modes 'r' and 'a'
+    // because of 'a' semantics, however, in-place header updates only possible in r+ mode
+    // Note that because 'r+' writes do not append they overwrite the fifo contents on a reopen.
     var flag = this.options.flag;
     if (flag[0] !== 'r' && flag[0] !== 'a') throw new Error(flag + ": bad open mode, expected 'r' or 'a'");
 
@@ -254,6 +255,7 @@ QFifo.prototype._writesome = function _writesome( ) {
 }
 QFifo.prototype._runFlushCallbacks = function _doFlush( ) {
     // TODO: would be faster to swap arrays than to shift, but code depends on this construct
+    // invoke those putline callbacks whose data has been written.  The callbacks are stored in write order
     while (this.flushCbs.length && (this.flushCbs[0].awaitCount <= this.writeDoneCount || this.error)) {
         this.flushCbs.shift().cb(this.error);
     }
