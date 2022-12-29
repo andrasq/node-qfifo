@@ -151,7 +151,7 @@ QFifo.prototype.flush = function flush( callback ) {
     this.open(function(err) {
         if (self.error) callback(self.error);
         else if (self.writeDoneCount >= self.writePendingCount) callback();
-        else self.flushCbs.push({ awaitCount: self.writePendingCount, cb: callback });
+        else self.flushCbs.push({ awaitCount: self.writePendingCount, cb: callback }), self._writesome();
     })
 }
 
@@ -247,7 +247,11 @@ QFifo.prototype._writesome = function _writesome( ) {
             else if (nbytes > 0) self.eof = self._eof = false;
             self.writeDoneCount += nchars;
             if (self.flushCbs.length) self._runFlushCallbacks();
-            if (self.writeDoneCount === self.writePendingCount) self.writeDoneCount = self.writePendingCount = 0;
+            if (!self.flushCbs.length && self.writeDoneCount === self.writePendingCount) {
+                // safe to chane the done/pending char counts if no flush callbacks are waiting
+                // (else would have to decrease all their awaitCounts by writeDoneCount)
+                self.writeDoneCount = self.writePendingCount = 0;
+            }
             if (self.writestring) self.open(writechunk); // keep writing if more data arrived
             else self.writing = false;
         })

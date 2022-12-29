@@ -240,7 +240,7 @@ Changelog
 ----------------
 
 - 0.7.0 - fixes, optional callback to `close`, experimental support for in-file headers,
-          much faster rsync for `r+` mode fifos
+          much faster rsync for `r+` mode fifos, fix `flush` callbacks
 - 0.6.0 - `rename` method, `remove` method, `compact` method, move batchCalls options to front
 - 0.5.0 - `matchFiles` method, experimental `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper
