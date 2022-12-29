@@ -64,6 +64,28 @@ module.exports = {
         })
     },
 
+    'putline': {
+        'can append fifos': function(t) {
+            var fifo = new QFifo(this.tempfile, 'a');
+            fifo.putline('line1'); // callback is optional
+            fifo.putline('line2', function(err) {
+                t.ifError(err);
+                var lines = readFifoSync(fifo).toString().split('\n');
+                t.deepEqual(lines, ['line1', 'line2', '']);
+                t.done();
+            })
+        },
+
+        'cannot write read-only fifos': function(t) {
+            var fifo = new QFifo(this.tempfile, 'r');
+            fifo.putline('line1', function(err) {
+                t.ok(err);
+                t.equal(err.code, 'EBADF'); // 'r' is read-only, cannot append
+                t.done();
+            })
+        },
+    },
+
     'open': {
         'fifos auto-open on read': function(t) {
             var fifo = new QFifo(__filename, 'r');

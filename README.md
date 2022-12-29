@@ -103,13 +103,14 @@ Checkpoint the byte offset of the next unread line from `fifo.position` so if th
 reopened it can resume reading where it left off.  The information is saved in JSON form to a
 separate file named the same as the fifo `filename` but with `'.hd'` appended.
 
-### fifo.putline( line )
+### fifo.putline( line [,callback(err)] )
 
 Append a line of text to the file.  All lines must be newline terminated; putline will supply
 the newline if it is missing.  Putline is a non-blocking call that buffers the data and returns
 immediately.  Writing is is done in batches asychronously in the background.  The application
 must periodically yield the cpu for the writes to happen.  Any write errors are saved in
-`fifo.error` and no further writes will be performed.
+`fifo.error` and no further writes will be performed.  The optional `callback` function will be
+called after the line has been written.
 
 ### fifo.write( string )
 
@@ -240,7 +241,7 @@ Changelog
 ----------------
 
 - 0.7.0 - fixes, optional callback to `close`, experimental support for in-file headers,
-          much faster rsync for `r+` mode fifos, fix `flush` callbacks
+          much faster rsync for `r+` mode fifos, fix `flush` callbacks, optional callback to `putline()`
 - 0.6.0 - `rename` method, `remove` method, `compact` method, move batchCalls options to front
 - 0.5.0 - `matchFiles` method, experimental `reopenInterval` option
 - 0.4.2 - `rotateFiles` helper, fledgeling `batchCalls` helper

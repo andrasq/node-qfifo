@@ -124,13 +124,14 @@ QFifo.prototype.close = function close( callback ) {
     if (callback) callback(err);
 }
 
-QFifo.prototype.putline = function putline( str ) {
+QFifo.prototype.putline = function putline( str, callback ) {
     // faster to append a newline here than to write a newline separately,
     // even though both are just concatenated to this.writestring.
     // TODO: allow for Buffers without converting first (to stream incoming data to fifo)
     // note: buffers must contain entire lines
     if (typeof str !== 'string') str = Buffer.isBuffer(str) ? str.toString(): String(str);
     str.charCodeAt(str.length - 1) === CH_NL ? this.write(str) : this.write(str + '\n');
+    if (callback) this.flushCbs.push({ awaitCount: this.writePendingCount, cb: callback });
 }
 
 QFifo.prototype.write = function write( str ) {
@@ -239,6 +240,7 @@ QFifo.prototype._writesome = function _writesome( ) {
     this.writing ? 'arlready writing, only one at a time' : (this.writing = true, this.open(writechunk));
     function writechunk() {
         if (self.error) { self.writing = false; self._runFlushCallbacks(); return }
+        // TODO: reuse writebuf instead of always a new fromBuf
         var nchars = self.writestring.length, writebuf = fromBuf(self.writestring);
         self.writestring = '';
         // node since v0.11.5 also accepts write(fd, string, cb), but the old api is faster
