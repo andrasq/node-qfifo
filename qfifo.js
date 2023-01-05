@@ -87,6 +87,15 @@ function getOption(opts, name, type, _default) {
 }
 
 /*
+ * Return true if the fifo does not contain any unread lines.
+ */
+QFifo.prototype.isEmpty = function isEmpty( ) {
+    return this.position >= this.writepos &&                    // all caught up reading
+        this.writeDoneCount >= this.writePendingCount &&        // no pending writes
+        this.readstringoffset >= this.readstring.length;        // no unconsumed reads
+}
+
+/*
  * Open the fifo for access.
  * This call also implements reopenInterval, so the returned file descriptor is always fresh.
  */

@@ -49,6 +49,25 @@ module.exports = {
         },
     },
 
+    'isEmpty tests whether data in fifo': function(t) {
+        var fifo = this.wfifo;
+        t.equal(fifo.isEmpty(), true);
+        fifo.putline('line1\n');
+        fifo.putline('line22\n');
+        t.equal(fifo.isEmpty(), false);
+        setTimeout(function() {
+            fifo.getline();
+            setTimeout(function() {
+                t.equal(fifo.getline(), 'line1\n');
+                t.equal(fifo.isEmpty(), false);
+                t.equal(fifo.getline(), 'line22\n');
+                t.equal(fifo.isEmpty(), true);
+                t.equal(fifo.isEmpty(), true);
+                t.done();
+            }, 5);
+        }, fifo.options.writeDelay + 3);
+    },
+
     'can open and read files': function(t) {
         var fifo = new QFifo(__filename);
         fifo.dataOffset = 0;
