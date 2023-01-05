@@ -62,7 +62,7 @@ Options may contain the following settings:
   next line to be read.  Default `true`.  `position` is needed to checkpoint the read state, but
   omitting it is 25% faster (for e.g. when the whole file is consumed without checkpointing).
 - `reopenInterval`: how frequently to reopen the fifo file, -1 never.  Default every 20 ms
-  to ensure that writes will cease after a rename.
+  to ensure that writes will cease after a grab or an external file rename.
 
 ### fifo.open( callback(err, fd) )
 

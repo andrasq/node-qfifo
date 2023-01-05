@@ -332,27 +332,26 @@ QFifo.prototype.compact = function compact( options, callback ) {
     if (typeof options === 'function') { callback = options; options = {} }
     var minSize = options.minSize >= 0 ? options.minSize : 1e6;
     var minReadRatio = options.minReadRatio >= 0 ? options.minReadRatio : 0.667; // NB!: ratio < 0.5 copy overlaps data
+    if (this.writepos < options.minSize || this.position / this.writepos < minReadRatio) return callback();
+
     var readSize = options.readSize > 0 ? options.readSize : this.options.readSize;
     var dstOffset = options.dstPosition || this.dataOffset;
     var self = this;
     self.open(function(err) {
         if (err) return callback(err);
-        fs.stat(self.filename, function(err, stats) {
-            if (err || stats.size < minSize || self.position / stats.size < minReadRatio) return callback(err);
-            // TODO: mutex reading/writing against compacting too
-            self.compacting = true;
-            var buf = allocBuf(readSize);
-            self.copyBytes(self.fd, self.fd, self.position, Infinity, dstOffset, buf, function(err, endPosition) {
+        // TODO: delay reading/writing until done compacting?
+        self.compacting = true;
+        var buf = allocBuf(readSize);
+        self.copyBytes(self.fd, self.fd, self.position, Infinity, dstOffset, buf, function(err, endPosition) {
+            if (err) { self.compacting = false; return callback(err) }
+            fs[ftruncateName](self.fd, endPosition, function(err) {
+                // TODO: make compact() reusable, move this section into the caller
                 if (err) { self.compacting = false; return callback(err) }
-                fs[ftruncateName](self.fd, endPosition, function(err) {
-                    // TODO: make compact() reusable, move this section into the caller
-                    if (err) { self.compacting = false; return callback(err) }
-                    self.seekoffset -= self.position;
-                    self.position = self.dataOffset;
-                    self.writepos = endPosition;
-                    self.compacting = false;
-                    self.rsync(callback);
-                })
+                self.seekoffset -= self.position;
+                self.position = self.dataOffset;
+                self.writepos = endPosition;
+                self.compacting = false;
+                self.rsync(callback);
             })
         })
     })
